@@ -2,39 +2,58 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <title></title>
+    <script src="TypeScript/Mvvm.TypeScript.js"></script>
+    <script src="TypeScript/Example.js"></script>
 </head>
 <body>
-    <div data-context="header" class="header">
-        <div class="right" data-bind="visible: isAuthenticated">
-            Hello, <span data-bind="text: $parent.user.fullName"></span>
-        </div>
+<div>
+    <span data-bind="text: name"></span>    
+</div>
+<div>
+    <input name="a1" data-bind="value: name"/>
+    <input name="b2" data-bind="value: bithday"/>
+</div>
+<p data-bind="visible: isVisible">
+    this is a very long invisible text block!!!
+</p>
+<div>
+    <label for="cb">
+        <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible"/>Is visible
+    </label>
+</div>
+
+<!--<div data-context="header" class="header">
+    <div class="right" data-bind="visible: isAuthenticated">
+        Hello, <span data-bind="text: $parent.user.fullName"></span>
     </div>
-    <div data-context="body" class="body">
-        <select data-bind="selectListItems: statuses, selectListValue: currentStatus, selectListDefaultText: 'choose'">
-            <option data-bind="text: statusName"></option>
-        </select>
-        <table>
-            <thead>
-                <tr>
-                    <th>Project</th>
-                    <th>Task</th>
-                    <th>Description</th>
-                    <th>Assigned to</th>
-                </tr>
-            </thead>
-            <tbody data-bind="list: projects">
-                <tr>
-                    <td data-bind="text: porjectName"></td>
-                    <td data-bind="text: taskName"></td>
-                    <td data-bind="text: Description"></td>
-                    <td data-bind="text: $root.user.fullName"></td>
-                </tr>
-            </tbody>
-        </table>
-        <div class="add-form" data-context="newTask">
-            <label>Task name: <input data-bind="value: name"/></label>
-            <button data-bind="enable: $parents[0].isAuthenticated, click: submit($this)">Submit</button>
-        </div>
+</div>
+<div data-context="body" class="body">
+    <select data-bind="selectListItems: statuses, selectListValue: currentStatus, selectListDefaultText: 'choose'">
+        <option data-bind="text: statusName"></option>
+    </select>
+    <table>
+        <thead>
+        <tr>
+            <th>Project</th>
+            <th>Task</th>
+            <th>Description</th>
+            <th>Assigned to</th>
+        </tr>
+        </thead>
+        <tbody data-bind="list: projects">
+        <tr>
+            <td data-bind="text: porjectName"></td>
+            <td data-bind="text: taskName"></td>
+            <td data-bind="text: Description"></td>
+            <td data-bind="text: $root.user.fullName"></td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="add-form" data-context="newTask">
+        <label>Task name: <input data-bind="value: name"/></label>
+        <button data-bind="enable: $parents[0].isAuthenticated, click: submit($this)">Submit</button>
     </div>
+</div>-->
+
 </body>
 </html>

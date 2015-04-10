@@ -17,7 +17,7 @@
         }
 
         dispose() {
-            this.bindings.forEach((binding) => {
+            this.bindings.forEach((binding: BindingBase) => {
                 binding.dispose();
             });
         }
@@ -45,42 +45,43 @@
     export interface IExpressionParser {
 
         parse(exprValue: string, context: BindingContext): Array<{
-            expression: IExpression;
+            evalExpression: IExpression;
             contextExpression: IExpression;
             bindingName: string;
-            propertyName: string;
+            memberName: string;
         }>;
 
     }
 
     class ExpressionParser implements IExpressionParser {
 
-        private static contextRegexp: RegExp = new RegExp("(?<params>(?<param>[^\.]+)(?:\.(?<param>[^\.]+))*");
+        //private static contextRegexp: RegExp = new RegExp("(?<params>(?<param>[^\.]+)(?:\.(?<param>[^\.]+))*");
+        private static contextRegexp: RegExp = new RegExp("");
         private static propertyNameExpression = new RegExp("");
 
         parse(exprValue: string, context: BindingContext): Array<{
-            expression: IExpression;
+            evalExpression: IExpression;
             contextExpression: IExpression;
             bindingName: string;
-            propertyName: string;
+            memberName: string;
         }> {
             var expressions = new Array<{
-                expression: IExpression;
+                evalExpression: IExpression;
                 contextExpression: IExpression;
                 bindingName: string;
-                propertyName: string;
+                memberName: string;
             }>();
 
             exprValue.split(",").forEach((bindingExpr) => {
                 var splitedBinding = bindingExpr.split(":", 2);
 
-                ExpressionParser.contextRegexp.exec("");
-
+                //ExpressionParser.contextRegexp.exec("");
+                // TODO: Parse complex expressions in the future. 
                 expressions.push({
                     bindingName: splitedBinding[0],
-                    expression: new Expression(context, splitedBinding[1]),
-                    contextExpression: null,
-                    propertyName: null
+                    evalExpression: new Expression(splitedBinding[1]),
+                    contextExpression: new Expression("$this"),
+                    memberName: splitedBinding[1]
                 });
             });
 
@@ -91,24 +92,31 @@
 
     export interface IExpression {
 
-        eval(): any;
+        evalMember: string;
+
+        eval(context: BindingContext): any;
 
     }
 
     export class Expression implements IExpression {
         
-        private context: BindingContext;
         private exprFunction: Function;
+        private evalMemberField: string;
 
-        constructor(context: BindingContext, body: string) {
-            this.context = context;
-            var scopedBody = "with($this){return " + body + ";}";
-            this.exprFunction = new Function("$this", "$parent", "$parents", "$root", scopedBody);
+        get evalMember(): string {
+            // TODO: perform calculation of invoked member
+            return this.evalMemberField;
         }
 
-        eval(): any {
-            return this.exprFunction(this.context.thisContext, this.context.parents[this.context.parents.length - 1],
-                this.context.parents, this.context.root);
+        constructor(body: string) {
+            var scopedBody = "with($this){return " + body + ";}";
+            this.exprFunction = new Function("$this", "$parent", "$parents", "$root", scopedBody);
+            this.evalMemberField = body.trim();
+        }
+
+        eval(context: BindingContext): any {
+            return this.exprFunction(context.thisContext, context.parents[context.parents.length - 1],
+                context.parents, context.root);
         }
     }
 
@@ -120,7 +128,12 @@
 
     class Binder implements IBinder {
 
-        private bindingFactories: { [bindingName: string]: IBindingFactory };
+        private bindingFactories: { [bindingName: string]: IBindingFactory } = {
+            "text": new SimpleBindingFactory((ctx, expr) => new TextBinding(ctx, expr)),
+            "value": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new ValueBinding(ctx, evalExpr, ctxExpr)),
+            "visible": new SimpleBindingFactory((ctx, evalExpr) => new VisiblilityBinding(ctx, evalExpr)),
+            "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr))
+        };
         private defaultBindingFactory: IBindingFactory;
         private parser: IExpressionParser;
 
@@ -141,8 +154,8 @@
                 // data-context
                 var dataContextAttr = child.attributes.getNamedItem("data-context");
                 if (dataContextAttr != null) {
-                    var ctxExpression = new Expression(context, dataContextAttr.value);
-                    thisContext = ctxExpression.eval();
+                    var ctxExpression = new Expression(dataContextAttr.value);
+                    thisContext = ctxExpression.eval(context);
                     parents = new Array(context.parents, context.thisContext);
                 } else {
                     thisContext = context.thisContext;
@@ -158,8 +171,8 @@
                     expressions.forEach((expr) => {
                         var bindingFactory = this.bindingFactories[expr.bindingName];
                         var binding = bindingFactory != null
-                            ? bindingFactory.buildBinding(newContext, expr.expression)
-                            : this.defaultBindingFactory.buildBinding(newContext, expr.expression);
+                            ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
+                            : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
 
                         bindingList.push(binding);
                     });
@@ -177,7 +190,19 @@
 
     export interface IBindingFactory {
         
-        buildBinding(context: BindingContext, expression: IExpression);
+        buildBinding(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression): BindingBase;
+
+    }
+
+    class SimpleBindingFactory implements IBindingFactory {
+
+        constructor(buildBinding: (context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) => BindingBase) {
+             this.buildBinding = buildBinding;
+        }
+
+        buildBinding(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression): BindingBase {
+            return this.buildBinding(context, evalExpression, contextExpression);
+        }
 
     }
 
@@ -186,11 +211,13 @@
         private contextField: BindingContext;
         protected get context(): BindingContext { return this.contextField; }
 
-        private expressionField: IExpression;
-        protected get expression(): IExpression { return this.expressionField; }
+        private evalExpressionField: IExpression;
+        protected get evalExpression(): IExpression { return this.evalExpressionField; }
 
-        constructor(context: BindingContext, expression: IExpression) {
+        constructor(context: BindingContext, evalExpression: IExpression) {
             this.contextField = context;
+            this.evalExpressionField = evalExpression;
+            this.applyBinding();
         }
 
         getConverter(): IValueConverter {
@@ -205,22 +232,150 @@
 
     export class PropertyBinding extends BindingBase {
 
-        private propertyNameField: string;
-        protected get propertyName(): string { return this.propertyNameField; }
+        private objectObserver: PropertyChangeObserver;
 
-        constructor(context: BindingContext, expression: IExpression, propertyName) {
-            super(context, expression);
-            this.propertyName = propertyName;
+        private elementPropertyNameField: string;
+        protected get elementPropertyName(): string { return this.elementPropertyNameField; }
+
+        constructor(context: BindingContext, evalExpression: IExpression, elementPropertyName: string) {
+            this.elementPropertyNameField = elementPropertyName;
+            super(context, evalExpression);
         }
 
         protected applyBinding() {
-            var observer = new PropertyChangeObserver(this.context.thisContext,(changeInfo) => {
-                if (changeInfo.propertyName !== this.propertyName) return;
-
-                var newValue = this.context.thisContext[changeInfo.propertyName];
-                var convertedValue = this.getConverter().convert(newValue);
-
+            this.objectObserver = new PropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+                if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
+                this.updateView();
             });
+
+            this.applyElementBinding();
+
+            this.updateView();
+        }
+
+        protected applyElementBinding() { }
+
+        protected updateView(): any {
+            var newValue = this.evalExpression.eval(this.context);
+            var convertedValue = this.getConverter().convert(newValue);
+            this.context.view[this.elementPropertyName] = convertedValue;
+        }
+
+    }
+
+    export class DuplexBinding extends PropertyBinding {
+
+        private contextExpression: IExpression;
+        private changeEventName: string;
+
+        constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression, elementPropertyName: string, changeEventName: string) {
+            this.changeEventName = changeEventName;
+            this.contextExpression = contextExpression;
+            super(context, evalExpression, elementPropertyName);
+        }
+
+        protected applyElementBinding() {
+            // TODO: perform the validation
+            var elementPropertyName = this.elementPropertyName;
+            var context = this.context;
+            var evalExpression = this.evalExpression;
+            this.context.view.addEventListener(this.changeEventName, (e) => {
+                var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
+                var thisContext = this.contextExpression.eval(context);
+                // Set property back
+                thisContext[evalExpression.evalMember] = convertedValue;
+            });
+        }
+    }
+
+    export class ValueBinding extends DuplexBinding {
+        constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) {
+            super(context, evalExpression, contextExpression, "value", "input");
+        } //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
+        //    super(context, evalExpression, "value");
+        //}
+
+        //protected applyElementBinding() {
+        //    // TODO: perform the validation
+        //    var elementPropertyName = this.elementPropertyName;
+        //    var context = this.context;
+        //    var evalExpression = this.evalExpression;
+        //    this.context.view.addEventListener("input", (e) => {
+        //        var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
+        //        var thisContext = this.contextExpression.eval(context);
+        //        // Set property back
+        //        thisContext[evalExpression.evalMember] = convertedValue;
+        //    });
+        //}
+
+    }
+
+    export class SelectedBinding extends DuplexBinding {
+
+        constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) {
+            super(context, evalExpression, contextExpression, "checked", "change");
+        } 
+
+        //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
+        //    super(context, evalExpression, "checked");
+        //}
+
+        //protected applyElementBinding() {
+        //    // TODO: perform the validation
+        //    var elementPropertyName = this.elementPropertyName;
+        //    var context = this.context;
+        //    var evalExpression = this.evalExpression;
+        //    this.context.view.addEventListener("change", (e) => {
+        //        var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
+        //        var thisContext = this.contextExpression.eval(context);
+        //        // Set property back
+        //        thisContext[evalExpression.evalMember] = convertedValue;
+        //    });
+        //}
+
+        getConverter(): IValueConverter { return new CheckedConverter(); }
+    }
+
+    class CheckedConverter implements IValueConverter {
+
+        convert(value) {
+            return value;
+        }
+
+        convertBack(elementValue) {
+            return elementValue;
+        }
+    }
+
+    export class StyleBinding extends PropertyBinding {
+        updateView() {
+            var newValue = this.evalExpression.eval(this.context);
+            var convertedValue = this.getConverter().convert(newValue);
+            this.context.view.style[this.elementPropertyName] = convertedValue;
+        }
+    }
+
+    export class VisiblilityBinding extends StyleBinding {
+        constructor(context: BindingContext, evalExpression: IExpression) {
+            super(context, evalExpression, "visibility"); 
+        }
+
+        getConverter(): IValueConverter { return new VisibilityValueConverter(); }
+    }
+
+    class VisibilityValueConverter implements IValueConverter {
+
+        convert(value) {
+            return value ? "visible" : "collapse";
+        }
+
+        convertBack(elementValue) { throw new Error("Back convertion is not supported."); }
+    }
+
+    export class TextBinding extends PropertyBinding {
+
+        constructor(context: BindingContext, expression: IExpression) {
+            super(context, expression, "innerText");
         }
 
     }
@@ -237,7 +392,7 @@
 
         protected applyBinding() {
             this.context.view.addEventListener(this.eventName, () => {
-                this.expression.eval();
+                this.evalExpression.eval(this.context);
             });
         }        
     }

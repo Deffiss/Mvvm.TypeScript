@@ -242,6 +242,7 @@
             super(context, evalExpression);
         }
 
+        // Apply the reaction on the view model changes
         protected applyBinding() {
             this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
                 if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
@@ -274,6 +275,7 @@
             super(context, evalExpression, elementPropertyName);
         }
 
+        // Apply the reaction on dom element changes
         protected applyElementBinding() {
             // TODO: perform the validation
             var elementPropertyName = this.elementPropertyName;
@@ -324,17 +326,23 @@
     }
 
     export class VisiblilityBinding extends StyleBinding {
+
+        private elementDisplayValue: string;
+
         constructor(context: BindingContext, evalExpression: IExpression) {
-            super(context, evalExpression, "visibility"); 
+            this.elementDisplayValue = context.view.style["display"];
+            super(context, evalExpression, "display");
         }
 
-        getConverter(): IValueConverter { return new VisibilityValueConverter(); }
+        getConverter(): IValueConverter { return new VisibilityValueConverter(this.elementDisplayValue); }
     }
 
     class VisibilityValueConverter implements IValueConverter {
 
+        constructor(private elementDisplayValue: string) {  }
+
         convert(value) {
-            return value ? "visible" : "collapse";
+            return value ? this.elementDisplayValue : "none";
         }
 
         convertBack(elementValue) { throw new Error("Back convertion is not supported."); }

@@ -60,6 +60,9 @@ var ExampleApplication = (function (_super) {
         rootViewModel.name = "Hello";
         rootViewModel.bithday = new Date(2000, 1, 1);
         rootViewModel.isVisible = false;
+        //Object.observe(rootViewModel, e => {
+        //    console.log(e);
+        //});
         return rootViewModel;
     };
     return ExampleApplication;

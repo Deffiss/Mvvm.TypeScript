@@ -232,7 +232,7 @@
 
     export class PropertyBinding extends BindingBase {
 
-        private objectObserver: PropertyChangeObserver;
+        private objectObserver: ModernPropertyChangeObserver;
 
         private elementPropertyNameField: string;
         protected get elementPropertyName(): string { return this.elementPropertyNameField; }
@@ -243,7 +243,7 @@
         }
 
         protected applyBinding() {
-            this.objectObserver = new PropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+            this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
                 if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
                 this.updateView();
             });
@@ -291,22 +291,7 @@
     export class ValueBinding extends DuplexBinding {
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) {
             super(context, evalExpression, contextExpression, "value", "input");
-        } //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
-        //    super(context, evalExpression, "value");
-        //}
-
-        //protected applyElementBinding() {
-        //    // TODO: perform the validation
-        //    var elementPropertyName = this.elementPropertyName;
-        //    var context = this.context;
-        //    var evalExpression = this.evalExpression;
-        //    this.context.view.addEventListener("input", (e) => {
-        //        var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
-        //        var thisContext = this.contextExpression.eval(context);
-        //        // Set property back
-        //        thisContext[evalExpression.evalMember] = convertedValue;
-        //    });
-        //}
+        }
 
     }
 
@@ -315,23 +300,6 @@
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) {
             super(context, evalExpression, contextExpression, "checked", "change");
         } 
-
-        //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
-        //    super(context, evalExpression, "checked");
-        //}
-
-        //protected applyElementBinding() {
-        //    // TODO: perform the validation
-        //    var elementPropertyName = this.elementPropertyName;
-        //    var context = this.context;
-        //    var evalExpression = this.evalExpression;
-        //    this.context.view.addEventListener("change", (e) => {
-        //        var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
-        //        var thisContext = this.contextExpression.eval(context);
-        //        // Set property back
-        //        thisContext[evalExpression.evalMember] = convertedValue;
-        //    });
-        //}
 
         getConverter(): IValueConverter { return new CheckedConverter(); }
     }
@@ -397,7 +365,6 @@
         }        
     }
 
-
     export interface IValueConverter {
         
         convert(value: any): any;
@@ -438,104 +405,29 @@
 
     }
 
-    export interface INotifyPropertyChanged {
-     
-        subscribe(handler: IPropertyChangeHandler);
-        unsubscribe(handler: IPropertyChangeHandler);
-           
-    }
+    class ModernPropertyChangeObserver {
 
-    export interface IPropertyChangeHandler {
-        
-        propertyChanged(sender: any, changeInfo: { propertyName: string; });
-
-    }
-
-    class PropertyChangeObserver implements IPropertyChangeHandler {
-
-        private observable: INotifyPropertyChanged;
+        private observable: any;
         private handler: (changeInfo: { propertyName: string }) => void;
 
         constructor(observable: any, handler: (changeInfo: { propertyName: string }) => void) {
             this.observable = observable;
             this.handler = handler;
-            this.observable.subscribe(this);
+            this.subscribe();
         }
 
-        propertyChanged(sender, changeInfo: { propertyName: string }) {
-            this.handler(changeInfo);
-        }
-    }
-
-    export interface INotifyCollectionChanged {
-        
-        subscribe(handler: ICollectionChangeHandler);
-        unsubscribe(handler: ICollectionChangeHandler);
-
-    }
-
-    export interface ICollectionChangeHandler {
-        
-        collectionChanged(sender: any, changeInfo: {added: any[]; removed: any[]})
-
-    }
-
-    export class ViewModelBase implements INotifyPropertyChanged {
-
-        private changeSubscribers: Array<IPropertyChangeHandler>;
-
-        constructor() {
-            this.changeSubscribers = new Array();
-        }
-
-        subscribe(handler: IPropertyChangeHandler) {
-            this.changeSubscribers.push(handler);
-        }
-
-        unsubscribe(handler: IPropertyChangeHandler) {
-            this.changeSubscribers.splice(0, this.changeSubscribers.indexOf(handler));
-        }
-
-        protected notifyPropertyChanged(changeInfo: { propertyName: string }) {
-            this.changeSubscribers.forEach((value) => {
-                value.propertyChanged(this, changeInfo);
-            });
-        }
-    }
-
-    export class BindableArray<T> implements INotifyCollectionChanged {
-
-        private changeSubscribers: Array<ICollectionChangeHandler>;
-
-        private innerArrayField: Array<T>;
-        get innerArray(): Array<T> { return this.innerArrayField; }
-
-        constructor(innerArray: Array<T>) {
-            this.innerArray = innerArray;
-            this.changeSubscribers = new Array();
-        }
-
-        add(item: T) {
-            this.innerArrayField.push(item);
-            this.changeSubscribers.forEach((value) => {
-                value.collectionChanged(this, { added: new Array(item), removed: new Array() });
+        private subscribe() {
+            Object.observe(this.observable, e => {
+                for (var i = 0; i < e.length; i++) {
+                    this.handler({ propertyName: e[i].name });
+                }
             });
         }
 
-        remove(item: T) {
-            this.innerArrayField.splice(0, this.innerArray.indexOf(item));
-            this.changeSubscribers.forEach((value) => {
-                value.collectionChanged(this, { added: new Array(), removed: new Array(item) });
-            });
-        }
+        dispose() { }
 
-        subscribe(handler: ICollectionChangeHandler) {
-            this.changeSubscribers.push(handler);
-        }
-
-        unsubscribe(handler: ICollectionChangeHandler) {
-            this.changeSubscribers.splice(0, this.changeSubscribers.indexOf(handler));
-        }
     }
+
+
 
 }

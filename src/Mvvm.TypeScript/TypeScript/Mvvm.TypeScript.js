@@ -184,7 +184,7 @@ var Mvvm;
             });
             PropertyBinding.prototype.applyBinding = function () {
                 var _this = this;
-                this.objectObserver = new PropertyChangeObserver(this.context.thisContext, function (changeInfo) {
+                this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, function (changeInfo) {
                     if (changeInfo.propertyName !== _this.evalExpression.evalMember)
                         return;
                     _this.updateView();
@@ -229,7 +229,7 @@ var Mvvm;
             __extends(ValueBinding, _super);
             function ValueBinding(context, evalExpression, contextExpression) {
                 _super.call(this, context, evalExpression, contextExpression, "value", "input");
-            } //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
+            }
             return ValueBinding;
         })(DuplexBinding);
         TypeScript.ValueBinding = ValueBinding;
@@ -238,21 +238,6 @@ var Mvvm;
             function SelectedBinding(context, evalExpression, contextExpression) {
                 _super.call(this, context, evalExpression, contextExpression, "checked", "change");
             }
-            //constructor(context: BindingContext, evalExpression: IExpression, private contextExpression: IExpression) {
-            //    super(context, evalExpression, "checked");
-            //}
-            //protected applyElementBinding() {
-            //    // TODO: perform the validation
-            //    var elementPropertyName = this.elementPropertyName;
-            //    var context = this.context;
-            //    var evalExpression = this.evalExpression;
-            //    this.context.view.addEventListener("change", (e) => {
-            //        var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
-            //        var thisContext = this.contextExpression.eval(context);
-            //        // Set property back
-            //        thisContext[evalExpression.evalMember] = convertedValue;
-            //    });
-            //}
             SelectedBinding.prototype.getConverter = function () {
                 return new CheckedConverter();
             };
@@ -384,71 +369,24 @@ var Mvvm;
             return BindingContext;
         })();
         TypeScript.BindingContext = BindingContext;
-        var PropertyChangeObserver = (function () {
-            function PropertyChangeObserver(observable, handler) {
+        var ModernPropertyChangeObserver = (function () {
+            function ModernPropertyChangeObserver(observable, handler) {
                 this.observable = observable;
                 this.handler = handler;
-                this.observable.subscribe(this);
+                this.subscribe();
             }
-            PropertyChangeObserver.prototype.propertyChanged = function (sender, changeInfo) {
-                this.handler(changeInfo);
-            };
-            return PropertyChangeObserver;
-        })();
-        var ViewModelBase = (function () {
-            function ViewModelBase() {
-                this.changeSubscribers = new Array();
-            }
-            ViewModelBase.prototype.subscribe = function (handler) {
-                this.changeSubscribers.push(handler);
-            };
-            ViewModelBase.prototype.unsubscribe = function (handler) {
-                this.changeSubscribers.splice(0, this.changeSubscribers.indexOf(handler));
-            };
-            ViewModelBase.prototype.notifyPropertyChanged = function (changeInfo) {
+            ModernPropertyChangeObserver.prototype.subscribe = function () {
                 var _this = this;
-                this.changeSubscribers.forEach(function (value) {
-                    value.propertyChanged(_this, changeInfo);
+                Object.observe(this.observable, function (e) {
+                    for (var i = 0; i < e.length; i++) {
+                        _this.handler({ propertyName: e[i].name });
+                    }
                 });
             };
-            return ViewModelBase;
+            ModernPropertyChangeObserver.prototype.dispose = function () {
+            };
+            return ModernPropertyChangeObserver;
         })();
-        TypeScript.ViewModelBase = ViewModelBase;
-        var BindableArray = (function () {
-            function BindableArray(innerArray) {
-                this.innerArray = innerArray;
-                this.changeSubscribers = new Array();
-            }
-            Object.defineProperty(BindableArray.prototype, "innerArray", {
-                get: function () {
-                    return this.innerArrayField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            BindableArray.prototype.add = function (item) {
-                var _this = this;
-                this.innerArrayField.push(item);
-                this.changeSubscribers.forEach(function (value) {
-                    value.collectionChanged(_this, { added: new Array(item), removed: new Array() });
-                });
-            };
-            BindableArray.prototype.remove = function (item) {
-                var _this = this;
-                this.innerArrayField.splice(0, this.innerArray.indexOf(item));
-                this.changeSubscribers.forEach(function (value) {
-                    value.collectionChanged(_this, { added: new Array(), removed: new Array(item) });
-                });
-            };
-            BindableArray.prototype.subscribe = function (handler) {
-                this.changeSubscribers.push(handler);
-            };
-            BindableArray.prototype.unsubscribe = function (handler) {
-                this.changeSubscribers.splice(0, this.changeSubscribers.indexOf(handler));
-            };
-            return BindableArray;
-        })();
-        TypeScript.BindableArray = BindableArray;
     })(TypeScript = Mvvm.TypeScript || (Mvvm.TypeScript = {}));
 })(Mvvm || (Mvvm = {}));
 //# sourceMappingURL=Mvvm.TypeScript.js.map

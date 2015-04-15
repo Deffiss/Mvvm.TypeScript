@@ -67,6 +67,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="css\mvvm.css" />
+    <Content Include="css\todomvc\todomvc-app-css\index.css" />
+    <Content Include="css\todomvc\todomvc-common\base.css" />
+    <Content Include="css\todomvc\todomvc-common\base.js" />
     <Content Include="Index.html" />
     <Content Include="libs\object-observe.js" />
     <Content Include="Web.config" />

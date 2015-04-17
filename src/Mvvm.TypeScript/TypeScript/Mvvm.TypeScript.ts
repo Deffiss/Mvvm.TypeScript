@@ -14,6 +14,7 @@
         startup() {
             var context = new BindingContext(this.root, new Array(this.root), this.root, document.body);
             this.bindings = this.binder.bind(context);
+            this.bindings.forEach(b => b.applyBinding());
         }
 
         dispose() {
@@ -132,7 +133,8 @@
             "text": new SimpleBindingFactory((ctx, expr) => new TextBinding(ctx, expr)),
             "value": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new ValueBinding(ctx, evalExpr, ctxExpr)),
             "visible": new SimpleBindingFactory((ctx, evalExpr) => new VisiblilityBinding(ctx, evalExpr)),
-            "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr))
+            "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr)),
+            "list": new SimpleBindingFactory((ctx, evalExpr) => new ListBinding(ctx, evalExpr, this))
         };
         private defaultBindingFactory: IBindingFactory;
         private parser: IExpressionParser;
@@ -173,7 +175,7 @@
                         var binding = bindingFactory != null
                             ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
                             : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
-
+                        //binding.applyBinding();
                         bindingList.push(binding);
                     });
                 }
@@ -217,14 +219,10 @@
         constructor(context: BindingContext, evalExpression: IExpression) {
             this.contextField = context;
             this.evalExpressionField = evalExpression;
-            this.applyBinding();
+            //this.applyBinding();
         }
 
-        getConverter(): IValueConverter {
-            return new ToStringConverter();
-        }
-
-        protected applyBinding() { throw new Error("Binding should be applied."); }
+        applyBinding() { throw new Error("Binding should be applied."); }
 
         dispose() { }
 
@@ -243,7 +241,7 @@
         }
 
         // Apply the reaction on the view model changes
-        protected applyBinding() {
+        applyBinding() {
             this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
                 if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
                 this.updateView();
@@ -255,6 +253,10 @@
         }
 
         protected applyElementBinding() { }
+
+        protected getConverter(): IValueConverter {
+            return new ToStringConverter();
+        }
 
         protected updateView(): any {
             var newValue = this.evalExpression.eval(this.context);
@@ -356,17 +358,86 @@
 
     }
 
+    export class ListBinding extends BindingBase {
+        private template: HTMLElement;
+        private arrayObserver: ModernArrayChangeObserver;
+        private objectObserver: ModernPropertyChangeObserver;
+
+        constructor(context: BindingContext, listExpression: IExpression, private binder: IBinder) {
+            super(context, listExpression);
+            this.extractTemplate();
+        }
+
+        applyBinding() {
+            this.clearElement();
+
+            // perform observing for array property itself
+            this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+                if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
+                // just perform rebinding
+                this.applyBinding();
+            });
+
+            // and now we have to observe collection changes
+            var observedArray = <Array<any>>this.evalExpression.eval(this.context);
+            this.arrayObserver = new ModernArrayChangeObserver(observedArray,(changeInfos) => {
+                // update each dom element according to changes
+                changeInfos.forEach(ci => {
+
+                });
+            });
+
+            this.populateElement();
+        }
+
+        private extractTemplate() {
+            this.template = document.createElement("div");
+            for (var i = 0; i < this.context.view.children.length; i++) {
+                var clonedNode = this.context.view.children[i].cloneNode(true);
+                this.template.appendChild(clonedNode);
+            }
+            this.clearElement();
+        }
+
+        private populateElement() {
+            var list = <Array<any>>this.evalExpression.eval(this.context);
+            list.forEach((item, i) => {
+                var clonedTemplate = <HTMLElement>this.template.cloneNode(true);
+                var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, clonedTemplate);
+                var newBindings = this.binder.bind(context);
+                newBindings.forEach(b => b.applyBinding());
+                for (var childIndex = 0; childIndex < clonedTemplate.children.length; childIndex++) {
+                    var child = clonedTemplate.children[childIndex];
+                    //var attr = new Attr();
+                    //attr.name = "data-list-index";
+                    //attr.value = i.toString();
+                    //child.attributes.setNamedItem(attr);
+                    this.context.view.appendChild(child);
+                }
+                // TODO: Save new binding for updates
+            });
+        }
+
+
+        private clearElement() {
+            while (this.context.view.firstChild) {
+                this.context.view.removeChild(this.context.view.firstChild);
+            }
+        }
+
+    }
+
     export class EventBinding extends BindingBase {
 
         private eventNameField: string;
         protected get eventName(): string { return this.eventNameField; }
 
-        constructor(context: BindingContext, expression: IExpression, eventName: string) {
-            super(context, expression);
+        constructor(context: BindingContext, eventExpression: IExpression, eventName: string) {
+            super(context, eventExpression);
             this.eventNameField = eventName;
         }
 
-        protected applyBinding() {
+        applyBinding() {
             this.context.view.addEventListener(this.eventName, () => {
                 this.evalExpression.eval(this.context);
             });
@@ -415,16 +486,12 @@
 
     class ModernPropertyChangeObserver {
 
-        private observable: any;
-        private handler: (changeInfo: { propertyName: string }) => void;
-
-        constructor(observable: any, handler: (changeInfo: { propertyName: string }) => void) {
-            this.observable = observable;
-            this.handler = handler;
+        constructor(private observable: any, private handler: (changeInfo: { propertyName: string }) => void) {
             this.subscribe();
         }
 
         private subscribe() {
+            if (typeof this.observable == "string") return;
             Object.observe(this.observable, e => {
                 for (var i = 0; i < e.length; i++) {
                     this.handler({ propertyName: e[i].name });
@@ -438,17 +505,38 @@
 
     export enum NotifyCollectionChangedAction {
         Add,
-        Remove,
-        Replace,
-        Move,
-        Reset
+        Update,
+        Delete,
     }
 
     class ModernArrayChangeObserver {
 
-        constructor(observableArray: Array<any>, handler: (changeInfo: {}) => void) {
-
+        constructor(private observableArray: Array<any>, private handler: (changeInfos: Array<{
+            action: NotifyCollectionChangedAction;
+            index: number;
+        }>) => void) {
+            this.subscribe();
         }
+
+        private subscribe() {
+            Object.observe(this.observableArray, e => {
+                var changeInfos: Array<{
+                    action: NotifyCollectionChangedAction;
+                    index: number;
+                }> = new Array();
+                for (var i = 0; i < e.length; i++) {
+                    if (e[i].name === "length") continue;
+
+                    changeInfos.push({
+                        action: NotifyCollectionChangedAction.Add,
+                        index: parseInt(e[i].name)
+                    });
+                }
+                this.handler(changeInfos);
+            });
+        }
+
+        dispose() { }
 
     }
 

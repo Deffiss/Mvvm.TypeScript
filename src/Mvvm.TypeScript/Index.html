@@ -30,11 +30,17 @@
 
 <div>
     <label for="cb">
-            <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible" />Is visible
+        <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible"/>Is visible
     </label>
 </div>
 
-    <!--TODO: todoMVS html-->
+<div>
+    <select data-bind="list: someArray">
+        <option data-bind="text: $this"></option>
+    </select>
+</div>
+
+<!--TODO: todoMVS html-->
     <!--<section id="todoapp">
         <header id="header">
             <h1>todos</h1>

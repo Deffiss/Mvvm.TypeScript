@@ -14,9 +14,14 @@
     <input name="a1" data-bind="value: name"/>
     <input name="b2" data-bind="value: bithday"/>
 </div>
-<p data-bind="visible: isVisible">
-    this is a very long invisible text block!!!
-</p>
+<div>
+    This is the begin
+    <b data-bind="visible: isVisible">
+        this is a very long invisible text block!!!
+    </b>    
+    This is the end
+</div>
+
 <div>
     <label for="cb">
         <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible"/>Is visible

@@ -436,6 +436,20 @@
 
     }
 
+    export enum NotifyCollectionChangedAction {
+        Add,
+        Remove,
+        Replace,
+        Move,
+        Reset
+    }
 
+    class ModernArrayChangeObserver {
+
+        constructor(observableArray: Array<any>, handler: (changeInfo: {}) => void) {
+
+        }
+
+    }
 
 }

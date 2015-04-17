@@ -1,33 +1,88 @@
 ﻿<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <title></title>
+    <title>ToDo</title>
+
+    <link rel="stylesheet" href="/css/todomvc/todomvc-common/base.css">
+    <link rel="stylesheet" href="/css/todomvc/todomvc-app-css/index.css">
+    <link rel="stylesheet" href="/css/mvvm.css">
+
     <script src="libs/object-observe.js"></script>
     <script src="TypeScript/Mvvm.TypeScript.js"></script>
     <script src="TypeScript/Example.js"></script>
+
 </head>
 <body>
 <div>
     <span data-bind="text: name"></span>    
 </div>
 <div>
-    <input name="a1" data-bind="value: name"/>
-    <input name="b2" data-bind="value: bithday"/>
+        <input name="a1" data-bind="value: name" />
+        <input name="b2" data-bind="value: bithday" />
 </div>
 <div>
     This is the begin
     <b data-bind="visible: isVisible">
-        this is a very long invisible text block!!!
+    this is a very long invisible text block!!!
     </b>    
     This is the end
 </div>
 
 <div>
     <label for="cb">
-        <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible"/>Is visible
+            <input id="cb" name="cb" type="checkbox" data-bind="selected: isVisible" />Is visible
     </label>
 </div>
 
+    <!--TODO: todoMVS html-->
+    <!--<section id="todoapp">
+        <header id="header">
+            <h1>todos</h1>
+            <form id="todo-form">
+                <input id="new-todo" placeholder="What needs to be done?" autofocus>
+            </form>
+        </header>
+        <section id="main">
+            <ul id="todo-list">
+                <li>
+                    <div class="view">
+                        <input class="toggle" type="checkbox">
+                        <label>Test</label>
+                        <button class="destroy"></button>
+                    </div>
+                    <form>
+                        <input class="edit">
+                    </form>
+                </li>
+            </ul>
+        </section>
+        <footer id="footer">
+            <span id="todo-count">
+                        <strong>1 item left</strong>
+                    </span>
+            <ul id="filters">
+                <li>
+                    <a href="#/">All</a>
+                </li>
+                <li>
+                    <a href="#/active">Active</a>
+                </li>
+                <li>
+                    <a href="#/completed">Completed</a>
+                </li>
+            </ul>
+            <button id="clear-completed">Clear completed (0)</button>
+        </footer>
+    </section>
+    <footer id="info">
+        <p>Double-click to edit a todo</p>
+        <p>
+            Credits:
+        </p>
+        <p>
+            Part of <a href="/">TodoMVC</a>
+        </p>
+    </footer>-->
 <!--<div data-context="header" class="header">
     <div class="right" data-bind="visible: isAuthenticated">
         Hello, <span data-bind="text: $parent.user.fullName"></span>

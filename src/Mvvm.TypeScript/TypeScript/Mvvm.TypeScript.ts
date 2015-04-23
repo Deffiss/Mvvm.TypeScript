@@ -79,10 +79,10 @@
                 //ExpressionParser.contextRegexp.exec("");
                 // TODO: Parse complex expressions in the future. 
                 expressions.push({
-                    bindingName: splitedBinding[0],
+                    bindingName: splitedBinding[0].trim(),
                     evalExpression: new Expression(splitedBinding[1]),
                     contextExpression: new Expression("$this"),
-                    memberName: splitedBinding[1]
+                    memberName: splitedBinding[1].trim()
                 });
             });
 
@@ -111,13 +111,13 @@
 
         constructor(body: string) {
             var scopedBody = "with($this){return " + body + ";}";
-            this.exprFunction = new Function("$this", "$parent", "$parents", "$root", scopedBody);
+            this.exprFunction = new Function("$this", "$parent", "$parents", "$root", "$index", scopedBody);
             this.evalMemberField = body.trim();
         }
 
         eval(context: BindingContext): any {
             return this.exprFunction(context.thisContext, context.parents[context.parents.length - 1],
-                context.parents, context.root);
+                context.parents, context.root, context.index);
         }
     }
 
@@ -134,7 +134,9 @@
             "value": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new ValueBinding(ctx, evalExpr, ctxExpr)),
             "visible": new SimpleBindingFactory((ctx, evalExpr) => new VisiblilityBinding(ctx, evalExpr)),
             "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr)),
-            "list": new SimpleBindingFactory((ctx, evalExpr) => new ListBinding(ctx, evalExpr, this))
+            "list": new SimpleBindingFactory((ctx, evalExpr) => new ListBinding(ctx, evalExpr, this)),
+            "submit": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "submit")),
+            "click": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "click"))
         };
         private defaultBindingFactory: IBindingFactory;
         private parser: IExpressionParser;
@@ -164,7 +166,7 @@
                     parents = context.parents;
                 }
 
-                var newContext = new BindingContext(thisContext, parents, context.root, child);
+                var newContext = new BindingContext(thisContext, parents, context.root, child, context.index);
 
                 // data-bind
                 var dataBindAttr = child.attributes.getNamedItem("data-bind");
@@ -264,6 +266,10 @@
             this.context.view[this.elementPropertyName] = convertedValue;
         }
 
+        dispose() {
+            this.objectObserver.dispose();
+        }
+
     }
 
     export class DuplexBinding extends PropertyBinding {
@@ -360,11 +366,13 @@
 
     export class ListBinding extends BindingBase {
         private template: HTMLElement;
+        private listBindingContexts: Array<ListBindingContex>;
         private arrayObserver: ModernArrayChangeObserver;
         private objectObserver: ModernPropertyChangeObserver;
 
         constructor(context: BindingContext, listExpression: IExpression, private binder: IBinder) {
             super(context, listExpression);
+            this.listBindingContexts = new Array();
             this.extractTemplate();
         }
 
@@ -380,10 +388,23 @@
 
             // and now we have to observe collection changes
             var observedArray = <Array<any>>this.evalExpression.eval(this.context);
+
             this.arrayObserver = new ModernArrayChangeObserver(observedArray,(changeInfos) => {
+                var list = <Array<any>>this.evalExpression.eval(this.context);
                 // update each dom element according to changes
                 changeInfos.forEach(ci => {
-
+                    switch (ci.action) {
+                        case NotifyCollectionChangedAction.Add:
+                            this.addNewItem(list[ci.index], ci.index);
+                            break;
+                        case NotifyCollectionChangedAction.Delete:
+                            this.deleteItem(ci.index);
+                            break;
+                        case NotifyCollectionChangedAction.Update:
+                            this.updateItem(ci.index, list[ci.index]);
+                        default:
+                            break;
+                    }
                 });
             });
 
@@ -401,23 +422,49 @@
 
         private populateElement() {
             var list = <Array<any>>this.evalExpression.eval(this.context);
-            list.forEach((item, i) => {
-                var clonedTemplate = <HTMLElement>this.template.cloneNode(true);
-                var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, clonedTemplate);
-                var newBindings = this.binder.bind(context);
-                newBindings.forEach(b => b.applyBinding());
-                for (var childIndex = 0; childIndex < clonedTemplate.children.length; childIndex++) {
-                    var child = clonedTemplate.children[childIndex];
-                    //var attr = new Attr();
-                    //attr.name = "data-list-index";
-                    //attr.value = i.toString();
-                    //child.attributes.setNamedItem(attr);
-                    this.context.view.appendChild(child);
-                }
-                // TODO: Save new binding for updates
-            });
+            list.forEach((item, i) => this.addNewItem(item, i));
         }
 
+        private addNewItem(item, index) {
+            var clonedTemplate = <HTMLElement>this.template.cloneNode(true);
+            var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, clonedTemplate, index);
+            // create bindings for cloned template
+            var newBindings = this.binder.bind(context);
+            var listBindingCtx = new ListBindingContex(new Array(), newBindings);
+            newBindings.forEach(b => b.applyBinding());
+            // add all children to our view
+            while (clonedTemplate.children.length > 0) {
+                var child = <HTMLElement>clonedTemplate.children[0];
+                this.context.view.appendChild(child);
+                listBindingCtx.elements.push(child);
+            }
+            // Save new binding for updates
+            this.listBindingContexts.push(listBindingCtx);
+        }
+
+        private deleteItem(index: number) {
+            var listBindingCtx = this.listBindingContexts[index];
+            listBindingCtx.bindings.forEach(b => b.dispose());
+            // dont know why sometimes this swiched to timer context
+            listBindingCtx.elements.forEach(e => this.context.view.removeChild(e));
+            this.listBindingContexts.splice(index, 1);
+        }
+
+        private updateItem(index: number, item) {
+            var listBindingCtx = this.listBindingContexts[index];
+            // dispose all bindings
+            listBindingCtx.bindings.forEach(b => b.dispose());
+            listBindingCtx.bindings.splice(0, listBindingCtx.bindings.length);
+            // and recreate all
+            listBindingCtx.elements.forEach(e => {
+                var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, e, index);
+                var newBindings = this.binder.bind(context);
+                newBindings.forEach(b => {
+                    b.applyBinding();
+                    listBindingCtx.bindings.push(b);
+                });
+            });
+        }
 
         private clearElement() {
             while (this.context.view.firstChild) {
@@ -425,6 +472,15 @@
             }
         }
 
+        dispose() {
+            this.objectObserver.dispose();
+        }
+
+    }
+
+    class ListBindingContex {
+        constructor(public elements: Array<HTMLElement>, public bindings: Array<BindingBase>) {
+        }
     }
 
     export class EventBinding extends BindingBase {
@@ -438,8 +494,11 @@
         }
 
         applyBinding() {
-            this.context.view.addEventListener(this.eventName, () => {
-                this.evalExpression.eval(this.context);
+            // create local scope because addEventListener forces to set "this" to dom element
+            var thisContext = this.context;
+            this.context.view.addEventListener(this.eventName,(e) => {
+                e.preventDefault();
+                this.evalExpression.eval(thisContext);
             });
         }        
     }
@@ -454,6 +513,7 @@
     export class ToStringConverter implements IValueConverter {
 
         convert(value) {
+            if (!value) return "";
             return value.toString();
         }
 
@@ -476,30 +536,41 @@
         private viewField: HTMLElement;
         get view(): HTMLElement { return this.viewField; }
 
-        constructor(thisContext: any, parents: Array<any>, root: any, view: HTMLElement) {
+        private indexField: number;
+        get index(): number { return this.indexField; }
+
+        constructor(thisContext: any, parents: Array<any>, root: any, view: HTMLElement, index?: number) {
             this.thisContextField = thisContext;
             this.parentsField = parents;
+            this.rootField = root;
             this.viewField = view;
+            this.indexField = index;
         }
 
     }
 
     class ModernPropertyChangeObserver {
 
+        private observeFunc;
+
         constructor(private observable: any, private handler: (changeInfo: { propertyName: string }) => void) {
             this.subscribe();
         }
 
         private subscribe() {
-            if (typeof this.observable == "string") return;
-            Object.observe(this.observable, e => {
+            this.observeFunc = e => {
                 for (var i = 0; i < e.length; i++) {
                     this.handler({ propertyName: e[i].name });
                 }
-            });
+            };
+
+            if (typeof this.observable == "string") return;
+            Object.observe(this.observable, this.observeFunc);
         }
 
-        dispose() { }
+        dispose() {
+            Object.unobserve(this.observable, this.observeFunc);
+        }
 
     }
 
@@ -511,6 +582,8 @@
 
     class ModernArrayChangeObserver {
 
+        private observeFunc;
+
         constructor(private observableArray: Array<any>, private handler: (changeInfos: Array<{
             action: NotifyCollectionChangedAction;
             index: number;
@@ -519,7 +592,7 @@
         }
 
         private subscribe() {
-            Object.observe(this.observableArray, e => {
+            this.observeFunc = e => {
                 var changeInfos: Array<{
                     action: NotifyCollectionChangedAction;
                     index: number;
@@ -527,16 +600,34 @@
                 for (var i = 0; i < e.length; i++) {
                     if (e[i].name === "length") continue;
 
+                    var action: NotifyCollectionChangedAction;
+                    switch (e[i].type) {
+                    case "add":
+                        action = NotifyCollectionChangedAction.Add;
+                        break;
+                    case "update":
+                        action = NotifyCollectionChangedAction.Update;
+                        break;
+                    case "delete":
+                        action = NotifyCollectionChangedAction.Delete;
+                        break;
+                    default:
+                        throw new Error("Unknown change");
+                    }
+
                     changeInfos.push({
-                        action: NotifyCollectionChangedAction.Add,
+                        action: action,
                         index: parseInt(e[i].name)
                     });
                 }
                 this.handler(changeInfos);
-            });
+            };
+            Object.observe(this.observableArray, this.observeFunc);
         }
 
-        dispose() { }
+        dispose() {
+            Object.unobserve(this.observableArray, this.observeFunc);
+        }
 
     }
 

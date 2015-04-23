@@ -13,7 +13,7 @@
 
 </head>
 <body>
-<div>
+<!--<div>
     <span data-bind="text: name"></span>    
 </div>
 <div>
@@ -38,23 +38,23 @@
     <select data-bind="list: someArray">
         <option data-bind="text: $this"></option>
     </select>
-</div>
+</div>-->
 
 <!--TODO: todoMVS html-->
-    <!--<section id="todoapp">
+    <section id="todoapp">
         <header id="header">
             <h1>todos</h1>
-            <form id="todo-form">
-                <input id="new-todo" placeholder="What needs to be done?" autofocus>
+            <form id="todo-form" data-bind="submit: addNewItem()">
+                <input id="new-todo" data-bind="value: newItemDescription" placeholder="What needs to be done?" autofocus>
             </form>
         </header>
         <section id="main">
-            <ul id="todo-list">
+            <ul id="todo-list" data-bind="list: todoItems">
                 <li>
                     <div class="view">
-                        <input class="toggle" type="checkbox">
-                        <label>Test</label>
-                        <button class="destroy"></button>
+                        <input class="toggle" type="checkbox" data-bind="selected: isDone">
+                        <label data-bind="text: description"></label>
+                        <button class="destroy" data-bind="click: $root.removeItem($index)"></button>
                     </div>
                     <form>
                         <input class="edit">
@@ -88,7 +88,7 @@
         <p>
             Part of <a href="/">TodoMVC</a>
         </p>
-    </footer>-->
+    </footer>
 <!--<div data-context="header" class="header">
     <div class="right" data-bind="visible: isAuthenticated">
         Hello, <span data-bind="text: $parent.user.fullName"></span>

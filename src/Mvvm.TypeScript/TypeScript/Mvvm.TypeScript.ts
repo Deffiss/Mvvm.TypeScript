@@ -486,6 +486,7 @@
     export class EventBinding extends BindingBase {
 
         private eventNameField: string;
+        private eventHandler;
         protected get eventName(): string { return this.eventNameField; }
 
         constructor(context: BindingContext, eventExpression: IExpression, eventName: string) {
@@ -496,11 +497,17 @@
         applyBinding() {
             // create local scope because addEventListener forces to set "this" to dom element
             var thisContext = this.context;
-            this.context.view.addEventListener(this.eventName,(e) => {
+            this.eventHandler = (e) => {
                 e.preventDefault();
                 this.evalExpression.eval(thisContext);
-            });
-        }        
+            };
+            this.context.view.addEventListener(this.eventName, this.eventHandler);
+        }
+
+        dispose() {
+            this.context.view.removeEventListener(this.eventName, this.eventHandler);
+        }
+
     }
 
     export interface IValueConverter {

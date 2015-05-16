@@ -13,7 +13,7 @@
 
         startup() {
             var context = new BindingContext(this.root, new Array(this.root), this.root, document.body);
-            this.bindings = this.binder.bind(context);
+            this.bindings = this.binder.bind(context, true);
             this.bindings.forEach(b => b.applyBinding());
         }
 
@@ -106,7 +106,7 @@
 
         get evalMember(): string {
             // TODO: perform calculation of invoked member
-            return this.evalMemberField;
+            return this.evalMemberField.replace("!", "");
         }
 
         constructor(body: string) {
@@ -123,7 +123,7 @@
 
     export interface IBinder {
         
-        bind(context: BindingContext): Array<BindingBase>;
+        bind(context: BindingContext, bindRootElement?: boolean): Array<BindingBase>;
 
     }
 
@@ -136,7 +136,11 @@
             "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr)),
             "list": new SimpleBindingFactory((ctx, evalExpr) => new ListBinding(ctx, evalExpr, this)),
             "submit": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "submit")),
-            "click": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "click"))
+            "click": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "click")),
+            "change": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "change")),
+            "dblClick": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "dblclick")),
+            "blur": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "blur")),
+            "class": new SimpleBindingFactory((ctx, evalExpr) => new ClassBinding(ctx, evalExpr)),
         };
         private defaultBindingFactory: IBindingFactory;
         private parser: IExpressionParser;
@@ -145,51 +149,104 @@
             this.parser = parser;
         }
 
-        bind(context: BindingContext): Array<BindingBase> {
+        bind(context: BindingContext, bindRootElement?: boolean): Array<BindingBase> {
             var bindingList = new Array<BindingBase>();
-            
-            for (var i = 0; i < context.view.children.length; i++) {
-                
-                var child = <HTMLElement>context.view.children[i];
 
-                var thisContext: any;
-                var parents: Array<any>;
-
-                // data-context
-                var dataContextAttr = child.attributes.getNamedItem("data-context");
-                if (dataContextAttr != null) {
-                    var ctxExpression = new Expression(dataContextAttr.value);
-                    thisContext = ctxExpression.eval(context);
-                    parents = new Array(context.parents, context.thisContext);
-                } else {
-                    thisContext = context.thisContext;
-                    parents = context.parents;
-                }
-
-                var newContext = new BindingContext(thisContext, parents, context.root, child, context.index);
-
-                // data-bind
-                var dataBindAttr = child.attributes.getNamedItem("data-bind");
-                if (dataBindAttr != null) {
-                    var expressions = this.parser.parse(dataBindAttr.value, newContext);
-                    expressions.forEach((expr) => {
-                        var bindingFactory = this.bindingFactories[expr.bindingName];
-                        var binding = bindingFactory != null
-                            ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
-                            : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
-                        //binding.applyBinding();
-                        bindingList.push(binding);
-                    });
-                }
-
-                // store to list
-                this.bind(newContext).forEach((binding) => {
+            if (bindRootElement) {
+                var rootElement = context.view;
+                this.bindElement(rootElement, context).forEach((binding) => {
                     bindingList.push(binding);
                 });
             }
 
+            for (var i = 0; i < context.view.children.length; i++) {
+                
+                var child = <HTMLElement>context.view.children[i];
+                this.bindElement(child, context).forEach((binding) => {
+                    bindingList.push(binding);
+                });;
+
+
+                //var thisContext: any;
+                //var parents: Array<any>;
+
+                //// data-context
+                //var dataContextAttr = child.attributes.getNamedItem("data-context");
+                //if (dataContextAttr != null) {
+                //    var ctxExpression = new Expression(dataContextAttr.value);
+                //    thisContext = ctxExpression.eval(context);
+                //    parents = new Array(context.parents, context.thisContext);
+                //} else {
+                //    thisContext = context.thisContext;
+                //    parents = context.parents;
+                //}
+
+                //var newContext = new BindingContext(thisContext, parents, context.root, child, context.index);
+
+                //// data-bind
+                //var dataBindAttr = child.attributes.getNamedItem("data-bind");
+                //if (dataBindAttr != null) {
+                //    var expressions = this.parser.parse(dataBindAttr.value, newContext);
+                //    expressions.forEach((expr) => {
+                //        var bindingFactory = this.bindingFactories[expr.bindingName];
+                //        var binding = bindingFactory != null
+                //            ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
+                //            : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
+                //        //binding.applyBinding();
+                //        bindingList.push(binding);
+                //    });
+
+                //}
+
+                //// store to list
+                //this.bind(newContext).forEach((binding) => {
+                //    bindingList.push(binding);
+                //});
+            }
+
             return bindingList;
         }
+
+        protected bindElement(element: HTMLElement, context: BindingContext): Array<BindingBase> {
+            var bindingList: Array<BindingBase> = new Array();
+            var thisContext: any;
+            var parents: Array<any>;
+
+            // data-context
+            var dataContextAttr = element.attributes.getNamedItem("data-context");
+            if (dataContextAttr != null) {
+                var ctxExpression = new Expression(dataContextAttr.value);
+                thisContext = ctxExpression.eval(context);
+                parents = new Array(context.parents, context.thisContext);
+            } else {
+                thisContext = context.thisContext;
+                parents = context.parents;
+            }
+
+            var newContext = new BindingContext(thisContext, parents, context.root, element, context.index);
+            
+            // data-bind
+            var dataBindAttr = element.attributes.getNamedItem("data-bind");
+            if (dataBindAttr != null) {
+                var expressions = this.parser.parse(dataBindAttr.value, newContext);
+                expressions.forEach((expr) => {
+                    var bindingFactory = this.bindingFactories[expr.bindingName];
+                    var binding = bindingFactory != null
+                        ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
+                        : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
+                    bindingList.push(binding);
+                });
+
+            }
+
+            // store to list
+            this.bind(newContext).forEach((binding) => {
+                bindingList.push(binding);
+            });
+
+            return bindingList;
+        }
+
     }
 
     export interface IBindingFactory {
@@ -221,7 +278,6 @@
         constructor(context: BindingContext, evalExpression: IExpression) {
             this.contextField = context;
             this.evalExpressionField = evalExpression;
-            //this.applyBinding();
         }
 
         applyBinding() { throw new Error("Binding should be applied."); }
@@ -232,19 +288,20 @@
 
     export class PropertyBinding extends BindingBase {
 
-        private objectObserver: ModernPropertyChangeObserver;
+        private objectObserverField: ModernPropertyChangeObserver;
+        protected get objectObserver(): ModernPropertyChangeObserver { return this.objectObserverField; }
 
         private elementPropertyNameField: string;
         protected get elementPropertyName(): string { return this.elementPropertyNameField; }
 
-        constructor(context: BindingContext, evalExpression: IExpression, elementPropertyName: string) {
+        constructor(context: BindingContext, evalExpression: IExpression, elementPropertyName?: string) {
             this.elementPropertyNameField = elementPropertyName;
             super(context, evalExpression);
         }
 
         // Apply the reaction on the view model changes
         applyBinding() {
-            this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+            this.objectObserverField = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
                 if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
                 this.updateView();
             });
@@ -267,7 +324,7 @@
         }
 
         dispose() {
-            this.objectObserver.dispose();
+            this.objectObserverField.dispose();
         }
 
     }
@@ -362,6 +419,39 @@
             super(context, expression, "innerText");
         }
 
+    }
+
+    export class ClassBinding extends PropertyBinding {
+
+        private previousClass: string = "";
+
+        constructor(context: BindingContext, expression: IExpression) {
+            super(context, expression);
+        }
+        
+        protected updateView(): any {
+            var newValue = this.evalExpression.eval(this.context);
+            var convertedValue = this.getConverter().convert(newValue);
+            //this.context.view[this.elementPropertyName] = convertedValue;
+            this.removePreviousClasses();
+            var view = this.context.view;
+            convertedValue.split(" ").forEach(c => {
+                if (c !== "") view.classList.add(c);
+            });
+            this.previousClass = convertedValue;
+        }
+
+        dispose() {
+            this.removePreviousClasses();
+            super.dispose();
+        }
+
+        private removePreviousClasses() {
+            var view = this.context.view;
+            this.previousClass.split(" ").forEach(c => {
+                if (c !== "") view.classList.remove(c);
+            });
+        }
     }
 
     export class ListBinding extends BindingBase {
@@ -520,7 +610,7 @@
     export class ToStringConverter implements IValueConverter {
 
         convert(value) {
-            if (!value) return "";
+            if (value == null) return "";
             return value.toString();
         }
 
@@ -556,7 +646,7 @@
 
     }
 
-    class ModernPropertyChangeObserver {
+    export class ModernPropertyChangeObserver {
 
         private observeFunc;
 

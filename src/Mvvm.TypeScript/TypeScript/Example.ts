@@ -26,30 +26,101 @@
 
 class TodoItemViewModel {
     isDone = false;
+    isEditing = false;
+    editStatus = "";
+    completeStatus = "";
 
     constructor(public description: string) {
     }
+
+    startEditing() {
+        this.isEditing = true;
+        this.editStatus = "editing";
+    }
+
+    endEditing() {
+        this.isEditing = false;
+        this.editStatus = "";
+    }
+
+    completionChanged() {
+        if (this.isDone) {
+            this.completeStatus = "completed";
+        } else {
+            this.completeStatus = "";
+        }
+    }
+
 }
 
 
 class TodoViewModel {
     newItemDescription: string;
+    waitingTodosCount: number;
+    allToggled: boolean;
+    currentTodoCollection: Array<TodoItemViewModel>;
     todoItems: Array<TodoItemViewModel>;
 
     constructor() {
         this.newItemDescription = null;
         this.todoItems = new Array();
+        this.currentTodoCollection = this.todoItems;
+        this.waitingTodosCount = 0;
+        this.allToggled = false;
     }
 
     addNewItem() {
-        this.todoItems.push(new TodoItemViewModel(this.newItemDescription));
+        var newTodo = new TodoItemViewModel(this.newItemDescription);
+        this.todoItems.push(newTodo);
         this.newItemDescription = null;
+        this.updateCounts();
     }
 
     removeItem(itemIndex: number) {
         this.todoItems.splice(itemIndex, 1);
+        this.updateCounts();
     }
 
+    checkTodo(item: TodoItemViewModel) {
+        item.completionChanged();
+        this.updateCounts();
+    }
+
+    updateCounts() {
+        var count: number = 0;
+        this.todoItems.forEach(item => {
+            if (!item.isDone) count++;
+        });
+        this.waitingTodosCount = count;
+        this.allToggled = count === 0;
+    }
+
+    toggleAll() {
+        if (this.allToggled) {
+            this.todoItems.forEach(item => {
+                item.isDone = true;
+                item.completionChanged();
+            });
+        } else {
+            this.todoItems.forEach(item => {
+                item.isDone = false;
+                item.completionChanged();
+            });
+        }
+        this.updateCounts();
+    }
+
+    clearCompleted() {
+        for (var todoNumber = 0; todoNumber < this.todoItems.length;) {
+            var todo = this.todoItems[todoNumber];
+            if (todo.isDone) {
+                this.todoItems.splice(todoNumber, 1);
+                continue;
+            }
+            todoNumber++;
+        }
+        this.updateCounts();
+    }
 }
 
 
@@ -57,8 +128,8 @@ class TodoViewModel {
 class TodoApplication extends Mvvm.TypeScript.Application {
     protected getRoot(): any {
         var rootViewModel = new TodoViewModel();
-        rootViewModel.todoItems.push(new TodoItemViewModel("Hello"));
-        rootViewModel.todoItems.push(new TodoItemViewModel("World"));
+        //rootViewModel.todoItems.push(new TodoItemViewModel("Hello"));
+        //rootViewModel.todoItems.push(new TodoItemViewModel("World"));
         return rootViewModel;
     }
 }

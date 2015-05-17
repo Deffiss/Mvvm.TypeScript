@@ -162,7 +162,7 @@
             for (var i = 0; i < context.view.children.length; i++) {
                 
                 var child = <HTMLElement>context.view.children[i];
-                this.bindElement(child, context).forEach((binding) => {
+                this.bindElement(child, context, true).forEach((binding) => {
                     bindingList.push(binding);
                 });;
 
@@ -207,7 +207,7 @@
             return bindingList;
         }
 
-        protected bindElement(element: HTMLElement, context: BindingContext): Array<BindingBase> {
+        protected bindElement(element: HTMLElement, context: BindingContext, recursiveBind?: boolean): Array<BindingBase> {
             var bindingList: Array<BindingBase> = new Array();
             var thisContext: any;
             var parents: Array<any>;
@@ -239,10 +239,12 @@
 
             }
 
-            // store to list
-            this.bind(newContext).forEach((binding) => {
-                bindingList.push(binding);
-            });
+            if (recursiveBind) {
+                // store to list
+                this.bind(newContext).forEach((binding) => {
+                    bindingList.push(binding);
+                });
+            }
 
             return bindingList;
         }
@@ -269,6 +271,9 @@
 
     export class BindingBase {
 
+        private isDispossedField: boolean;
+        get isDispossed(): boolean { return this.isDispossedField; }
+
         private contextField: BindingContext;
         protected get context(): BindingContext { return this.contextField; }
 
@@ -282,7 +287,9 @@
 
         applyBinding() { throw new Error("Binding should be applied."); }
 
-        dispose() { }
+        dispose() {
+            this.isDispossedField = true;
+        }
 
     }
 
@@ -302,7 +309,7 @@
         // Apply the reaction on the view model changes
         applyBinding() {
             this.objectObserverField = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
-                if (changeInfo.propertyName !== this.evalExpression.evalMember) return;
+                if (changeInfo.propertyName !== this.evalExpression.evalMember || this.isDispossed) return;
                 this.updateView();
             });
 
@@ -325,6 +332,7 @@
 
         dispose() {
             this.objectObserverField.dispose();
+            super.dispose();
         }
 
     }
@@ -333,6 +341,7 @@
 
         private contextExpression: IExpression;
         private changeEventName: string;
+        private eventHandler;
 
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression, elementPropertyName: string, changeEventName: string) {
             this.changeEventName = changeEventName;
@@ -346,12 +355,20 @@
             var elementPropertyName = this.elementPropertyName;
             var context = this.context;
             var evalExpression = this.evalExpression;
-            this.context.view.addEventListener(this.changeEventName, (e) => {
+
+            this.eventHandler = (e) => {
                 var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
                 var thisContext = this.contextExpression.eval(context);
                 // Set property back
                 thisContext[evalExpression.evalMember] = convertedValue;
-            });
+            };
+
+            this.context.view.addEventListener(this.changeEventName, this.eventHandler);
+        }
+
+        dispose() {
+            this.context.view.removeEventListener(this.changeEventName, this.eventHandler);
+            super.dispose();
         }
     }
 
@@ -485,13 +502,13 @@
                 changeInfos.forEach(ci => {
                     switch (ci.action) {
                         case NotifyCollectionChangedAction.Add:
-                            this.addNewItem(list[ci.index], ci.index);
+                            if (list[ci.index]) this.addNewItem(list[ci.index], ci.index);
                             break;
                         case NotifyCollectionChangedAction.Delete:
                             this.deleteItem(ci.index);
                             break;
                         case NotifyCollectionChangedAction.Update:
-                            this.updateItem(ci.index, list[ci.index]);
+                            if (list[ci.index]) this.updateItem(ci.index, list[ci.index]);
                         default:
                             break;
                     }
@@ -548,7 +565,7 @@
             // and recreate all
             listBindingCtx.elements.forEach(e => {
                 var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, e, index);
-                var newBindings = this.binder.bind(context);
+                var newBindings = this.binder.bind(context, true);
                 newBindings.forEach(b => {
                     b.applyBinding();
                     listBindingCtx.bindings.push(b);
@@ -564,6 +581,7 @@
 
         dispose() {
             this.objectObserver.dispose();
+            super.dispose();
         }
 
     }
@@ -589,6 +607,7 @@
             var thisContext = this.context;
             this.eventHandler = (e) => {
                 e.preventDefault();
+                if (this.isDispossed) return;
                 this.evalExpression.eval(thisContext);
             };
             this.context.view.addEventListener(this.eventName, this.eventHandler);
@@ -596,6 +615,13 @@
 
         dispose() {
             this.context.view.removeEventListener(this.eventName, this.eventHandler);
+            super.dispose();
+        }
+
+        protected evalEventHandler(e, thisContext: BindingContext) {
+            e.preventDefault();
+            if (this.isDispossed) return;
+            this.evalExpression.eval(thisContext);
         }
 
     }
@@ -661,7 +687,7 @@
                 }
             };
 
-            if (typeof this.observable == "string") return;
+            if (this.observable == null || typeof this.observable == "string") return;
             Object.observe(this.observable, this.observeFunc);
         }
 

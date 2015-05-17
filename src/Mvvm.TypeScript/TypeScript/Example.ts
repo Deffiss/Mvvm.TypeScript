@@ -1,30 +1,5 @@
-﻿//class ExampleViewModel  {
-
-//    name: string;
-
-//    bithday: Date;
-
-//    isVisible: boolean;
-
-//    someArray: Array<string>;
-
-//}
-
-//var rootViewModel = new ExampleViewModel();
-//rootViewModel.name = "Hello";
-//rootViewModel.bithday = new Date(2000, 1, 1);
-//rootViewModel.isVisible = false;
-//rootViewModel.someArray = ["Hello", "World"];
-
-//class ExampleApplication extends Mvvm.TypeScript.Application {
-    
-//    protected getRoot(): any {
-//        return rootViewModel;
-//    }
-
-//}
-
-class TodoItemViewModel {
+﻿class TodoItemViewModel {
+    private unmodifiedDescription: string;
     isDone = false;
     isEditing = false;
     editStatus = "";
@@ -36,11 +11,18 @@ class TodoItemViewModel {
     startEditing() {
         this.isEditing = true;
         this.editStatus = "editing";
+        this.unmodifiedDescription = this.description;
     }
 
     endEditing() {
         this.isEditing = false;
         this.editStatus = "";
+    }
+
+    cancelEditing() {
+        this.isEditing = false;
+        this.editStatus = "";
+        this.description = this.unmodifiedDescription;
     }
 
     completionChanged() {
@@ -53,46 +35,108 @@ class TodoItemViewModel {
 
 }
 
+enum TodoFilter {
+    All,
+    Active,
+    Completed
+}
+
+class FilterViewModel {
+    currentFilter: TodoFilter = TodoFilter.All;
+
+    allFilterStatus: string = "selected";
+    activeFilterStatus: string = "";
+    completedFilterStatus: string = "";
+
+    setCurrentFilter(filter: TodoFilter) {
+        this.currentFilter = filter;
+        this.allFilterStatus = "";
+        this.activeFilterStatus = "";
+        this.completedFilterStatus = "";
+        switch (filter) {
+            case TodoFilter.All:
+                this.allFilterStatus = "selected";
+                break;
+            case TodoFilter.Active:
+                this.activeFilterStatus = "selected";
+                break;
+            case TodoFilter.Completed:
+                this.completedFilterStatus = "selected";
+                break;
+            default:
+                break;
+        }
+    }
+
+}
 
 class TodoViewModel {
     newItemDescription: string;
+
     waitingTodosCount: number;
+
     allToggled: boolean;
-    currentTodoCollection: Array<TodoItemViewModel>;
+    hasCompletedTodos: boolean;
+    hasTodos: boolean;
+
+    filteredTodoItems: Array<TodoItemViewModel>;
     todoItems: Array<TodoItemViewModel>;
+
+    filter: FilterViewModel;
 
     constructor() {
         this.newItemDescription = null;
         this.todoItems = new Array();
-        this.currentTodoCollection = this.todoItems;
+        this.filteredTodoItems = new Array();
         this.waitingTodosCount = 0;
         this.allToggled = false;
+        this.hasCompletedTodos = false;
+        this.hasTodos = false;
+        this.filter = new FilterViewModel();
     }
 
     addNewItem() {
         var newTodo = new TodoItemViewModel(this.newItemDescription);
+        if (this.filter.currentFilter === TodoFilter.All
+            || this.filter.currentFilter === TodoFilter.Active) {
+            this.filteredTodoItems.push(newTodo);            
+        }
+
         this.todoItems.push(newTodo);
         this.newItemDescription = null;
         this.updateCounts();
     }
 
     removeItem(itemIndex: number) {
-        this.todoItems.splice(itemIndex, 1);
+        var todo = this.filteredTodoItems[itemIndex];
+        this.filteredTodoItems.splice(itemIndex, 1);
+
+        this.todoItems.splice(this.todoItems.indexOf(todo), 1);
+
         this.updateCounts();
     }
 
     checkTodo(item: TodoItemViewModel) {
         item.completionChanged();
         this.updateCounts();
+
+        if (item.isDone && this.filter.currentFilter === TodoFilter.Active) {
+            this.filteredTodoItems.splice(this.filteredTodoItems.indexOf(item), 1);
+        }
+        if (!item.isDone && this.filter.currentFilter === TodoFilter.Completed) {
+            this.filteredTodoItems.splice(this.filteredTodoItems.indexOf(item), 1);
+        }
     }
 
     updateCounts() {
-        var count: number = 0;
+        var notCompletedCount: number = 0;
         this.todoItems.forEach(item => {
-            if (!item.isDone) count++;
+            if (!item.isDone) notCompletedCount++;
         });
-        this.waitingTodosCount = count;
-        this.allToggled = count === 0;
+        this.waitingTodosCount = notCompletedCount;
+        this.hasTodos = this.todoItems.length !== 0;
+        this.allToggled = notCompletedCount === 0 && this.hasTodos;
+        this.hasCompletedTodos = notCompletedCount !== this.todoItems.length;
     }
 
     toggleAll() {
@@ -108,54 +152,63 @@ class TodoViewModel {
             });
         }
         this.updateCounts();
+        if (this.filter.currentFilter === TodoFilter.Completed
+            && this.filteredTodoItems.length != this.todoItems.length) {
+            this.updateCurrentCollection();
+        }
     }
 
     clearCompleted() {
-        for (var todoNumber = 0; todoNumber < this.todoItems.length;) {
-            var todo = this.todoItems[todoNumber];
-            if (todo.isDone) {
-                this.todoItems.splice(todoNumber, 1);
-                continue;
+        [this.todoItems, this.filteredTodoItems].forEach(collection => {
+            for (var todoNumber = 0; todoNumber < collection.length;) {
+                var todo = collection[todoNumber];
+                if (todo.isDone) {
+                    collection.splice(todoNumber, 1);
+                    continue;
+                }
+                todoNumber++;
             }
-            todoNumber++;
-        }
+        });
+
         this.updateCounts();
     }
+
+    filterTodos(filter: TodoFilter) {
+        this.filter.setCurrentFilter(filter);
+        this.updateCurrentCollection();
+    }
+
+    private updateCurrentCollection() {
+        var filterFunc: (todo: TodoItemViewModel) => boolean;
+        switch (this.filter.currentFilter) {
+            case TodoFilter.All:
+                filterFunc = () => true;
+                break;
+            case TodoFilter.Active:
+                filterFunc = (item) => !item.isDone;
+                break;
+            case TodoFilter.Completed:
+                filterFunc = (item) => item.isDone;
+                break;
+            default:
+                break;
+        }
+        this.filteredTodoItems.splice(0);
+        this.todoItems.forEach((todo) => {
+            if (filterFunc(todo)) this.filteredTodoItems.push(todo);
+        });
+    }
 }
-
-
 
 class TodoApplication extends Mvvm.TypeScript.Application {
     protected getRoot(): any {
         var rootViewModel = new TodoViewModel();
-        //rootViewModel.todoItems.push(new TodoItemViewModel("Hello"));
-        //rootViewModel.todoItems.push(new TodoItemViewModel("World"));
         return rootViewModel;
     }
 }
 
-
 window.onload = (e) => {
-
-    //var testArray = [1, 2, 3];
-    //Object.observe(testArray, (e) => {
-    //    console.log(e);
-    //});
-
-    //testArray.push(10);
-    //testArray.splice(0, 1);
-
-
     var app = new TodoApplication();
     app.startup();
-
-
-    //rootViewModel.someArray.splice(1, 1);
-    //rootViewModel.someArray.push("c#");
-    //rootViewModel.someArray.push("in");
-    //rootViewModel.someArray.push("depth");
-
-    //rootViewModel.someArray[1] = "WPF";
-
 };
 

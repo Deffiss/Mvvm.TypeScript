@@ -140,6 +140,7 @@
             "change": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "change")),
             "dblClick": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "dblclick")),
             "blur": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "blur")),
+            "escape": new SimpleBindingFactory((ctx, evalExpr) => new EscapeBinding(ctx, evalExpr)),
             "class": new SimpleBindingFactory((ctx, evalExpr) => new ClassBinding(ctx, evalExpr)),
         };
         private defaultBindingFactory: IBindingFactory;
@@ -327,6 +328,8 @@
         protected updateView(): any {
             var newValue = this.evalExpression.eval(this.context);
             var convertedValue = this.getConverter().convert(newValue);
+            var currentElementValue = this.context.view[this.elementPropertyName];
+            if (convertedValue === currentElementValue) return;
             this.context.view[this.elementPropertyName] = convertedValue;
         }
 
@@ -606,9 +609,10 @@
             // create local scope because addEventListener forces to set "this" to dom element
             var thisContext = this.context;
             this.eventHandler = (e) => {
-                e.preventDefault();
-                if (this.isDispossed) return;
-                this.evalExpression.eval(thisContext);
+                this.evalEventHandler(e, thisContext);
+                //e.preventDefault();
+                //if (this.isDispossed) return;
+                //this.evalExpression.eval(thisContext);
             };
             this.context.view.addEventListener(this.eventName, this.eventHandler);
         }
@@ -624,6 +628,19 @@
             this.evalExpression.eval(thisContext);
         }
 
+    }
+
+    export class EscapeBinding extends EventBinding {
+        constructor(context: BindingContext, eventExpression: IExpression) {
+            super(context, eventExpression, "keyup");
+        }
+
+        protected evalEventHandler(e, thisContext: BindingContext) {
+            if (e.keyCode !== 27) return;
+            e.preventDefault();
+            if (this.isDispossed) return;
+            this.evalExpression.eval(thisContext);
+        }
     }
 
     export interface IValueConverter {

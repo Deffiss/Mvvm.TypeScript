@@ -31,7 +31,7 @@
                         <button class="destroy" data-bind="click: $root.removeItem($index)"></button>
                     </div>
                     <form data-bind="submit: endEditing()">
-                        <input class="edit" data-bind="value: description, blur: endEditing()">
+                        <input class="edit" data-bind="value: description, blur: endEditing(), escape: cancelEditing()">
                     </form>
                 </li>
             </ul>

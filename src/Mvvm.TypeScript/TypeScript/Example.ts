@@ -95,6 +95,22 @@ class TodoViewModel {
         this.filter = new FilterViewModel();
     }
 
+    addItem(description: string, isDone: boolean) {
+        var newTodo = new TodoItemViewModel(description);
+        newTodo.isDone = isDone;
+        if (isDone) newTodo.completionChanged();
+
+        if (this.filter.currentFilter === TodoFilter.All
+            || (this.filter.currentFilter === TodoFilter.Active && !isDone)
+            || (this.filter.currentFilter === TodoFilter.Completed && isDone)) {
+            this.filteredTodoItems.push(newTodo);
+        }
+
+        this.todoItems.push(newTodo);
+        this.newItemDescription = null;
+        this.updateCounts();
+    }
+
     addNewItem() {
         var newTodo = new TodoItemViewModel(this.newItemDescription);
         if (this.filter.currentFilter === TodoFilter.All
@@ -178,7 +194,7 @@ class TodoViewModel {
         this.updateCurrentCollection();
     }
 
-    private updateCurrentCollection() {
+    updateCurrentCollection() {
         var filterFunc: (todo: TodoItemViewModel) => boolean;
         switch (this.filter.currentFilter) {
             case TodoFilter.All:
@@ -200,15 +216,33 @@ class TodoViewModel {
     }
 }
 
+var rootViewModel = new TodoViewModel();
+
 class TodoApplication extends Mvvm.TypeScript.Application {
     protected getRoot(): any {
-        var rootViewModel = new TodoViewModel();
         return rootViewModel;
     }
 }
 
 window.onload = (e) => {
+    if (Storage) {
+        var todos = <Array<TodoItemViewModel>>JSON.parse(localStorage.getItem("todos"));
+        if (todos) {
+            for (var todoNumber = 0; todoNumber < todos.length; todoNumber++) {
+                rootViewModel.addItem(todos[todoNumber].description, todos[todoNumber].isDone);
+            }
+        }
+
+    }
+
     var app = new TodoApplication();
     app.startup();
 };
+
+if (Storage) {
+    window.addEventListener("unload", e => {
+        var serializedTodos = JSON.stringify(rootViewModel.todoItems);
+        localStorage.setItem("todos", serializedTodos);
+    });
+}
 

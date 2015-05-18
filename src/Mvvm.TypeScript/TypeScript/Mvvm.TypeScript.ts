@@ -640,6 +640,7 @@
             e.preventDefault();
             if (this.isDispossed) return;
             this.evalExpression.eval(thisContext);
+            this.context.view.blur();
         }
     }
 

@@ -62,6 +62,8 @@
     <Content Include="libs\object-observe.min.js.map">
       <DependentUpon>object-observe.min.js</DependentUpon>
     </Content>
+    <None Include="Properties\PublishProfiles\todomvvm - FTP.pubxml" />
+    <None Include="Properties\PublishProfiles\todomvvm - Web Deploy.pubxml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>
@@ -73,7 +75,6 @@
     <Content Include="css\mvvm.css" />
     <Content Include="css\todomvc\todomvc-app-css\index.css" />
     <Content Include="css\todomvc\todomvc-common\base.css" />
-    <Content Include="css\todomvc\todomvc-common\base.js" />
     <Content Include="Index.html" />
     <Content Include="libs\object-observe.js" />
     <Content Include="libs\object-observe.min.js">

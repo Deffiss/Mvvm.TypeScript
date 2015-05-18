@@ -436,7 +436,7 @@
     export class TextBinding extends PropertyBinding {
 
         constructor(context: BindingContext, expression: IExpression) {
-            super(context, expression, "innerText");
+            super(context, expression, "textContent");
         }
 
     }

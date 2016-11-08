@@ -303,8 +303,8 @@
         protected get elementPropertyName(): string { return this.elementPropertyNameField; }
 
         constructor(context: BindingContext, evalExpression: IExpression, elementPropertyName?: string) {
-            this.elementPropertyNameField = elementPropertyName;
             super(context, evalExpression);
+            this.elementPropertyNameField = elementPropertyName;
         }
 
         // Apply the reaction on the view model changes
@@ -347,9 +347,9 @@
         private eventHandler;
 
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression, elementPropertyName: string, changeEventName: string) {
+            super(context, evalExpression, elementPropertyName);
             this.changeEventName = changeEventName;
             this.contextExpression = contextExpression;
-            super(context, evalExpression, elementPropertyName);
         }
 
         // Apply the reaction on dom element changes
@@ -415,8 +415,8 @@
         private elementDisplayValue: string;
 
         constructor(context: BindingContext, evalExpression: IExpression) {
-            this.elementDisplayValue = context.view.style["display"];
             super(context, evalExpression, "display");
+            this.elementDisplayValue = context.view.style["display"];
         }
 
         getConverter(): IValueConverter { return new VisibilityValueConverter(this.elementDisplayValue); }

@@ -32,7 +32,6 @@
             this.completeStatus = "";
         }
     }
-
 }
 
 enum TodoFilter {

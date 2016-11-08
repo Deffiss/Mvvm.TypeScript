@@ -1,4 +1,4 @@
-﻿module Mvvm.TypeScript {
+﻿namespace Mvvm.TypeScript {
 
     export class Application {
 

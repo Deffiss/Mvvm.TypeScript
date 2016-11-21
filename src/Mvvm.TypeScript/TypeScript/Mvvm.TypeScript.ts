@@ -1,4 +1,6 @@
-﻿module Mvvm.TypeScript {
+﻿/// <reference path="object.observe.d.ts" />
+
+namespace Mvvm.TypeScript {
 
     export class Application {
 
@@ -100,7 +102,7 @@
     }
 
     export class Expression implements IExpression {
-        
+
         private exprFunction: Function;
         private evalMemberField: string;
 
@@ -122,7 +124,7 @@
     }
 
     export interface IBinder {
-        
+
         bind(context: BindingContext, bindRootElement?: boolean): Array<BindingBase>;
 
     }
@@ -161,7 +163,7 @@
             }
 
             for (var i = 0; i < context.view.children.length; i++) {
-                
+
                 var child = <HTMLElement>context.view.children[i];
                 this.bindElement(child, context, true).forEach((binding) => {
                     bindingList.push(binding);
@@ -225,7 +227,7 @@
             }
 
             var newContext = new BindingContext(thisContext, parents, context.root, element, context.index);
-            
+
             // data-bind
             var dataBindAttr = element.attributes.getNamedItem("data-bind");
             if (dataBindAttr != null) {
@@ -253,7 +255,7 @@
     }
 
     export interface IBindingFactory {
-        
+
         buildBinding(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression): BindingBase;
 
     }
@@ -303,8 +305,8 @@
         protected get elementPropertyName(): string { return this.elementPropertyNameField; }
 
         constructor(context: BindingContext, evalExpression: IExpression, elementPropertyName?: string) {
-            this.elementPropertyNameField = elementPropertyName;
             super(context, evalExpression);
+            this.elementPropertyNameField = elementPropertyName;
         }
 
         // Apply the reaction on the view model changes
@@ -347,9 +349,9 @@
         private eventHandler;
 
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression, elementPropertyName: string, changeEventName: string) {
+            super(context, evalExpression, elementPropertyName);
             this.changeEventName = changeEventName;
             this.contextExpression = contextExpression;
-            super(context, evalExpression, elementPropertyName);
         }
 
         // Apply the reaction on dom element changes
@@ -386,7 +388,7 @@
 
         constructor(context: BindingContext, evalExpression: IExpression, contextExpression: IExpression) {
             super(context, evalExpression, contextExpression, "checked", "change");
-        } 
+        }
 
         getConverter(): IValueConverter { return new CheckedConverter(); }
     }
@@ -415,8 +417,8 @@
         private elementDisplayValue: string;
 
         constructor(context: BindingContext, evalExpression: IExpression) {
-            this.elementDisplayValue = context.view.style["display"];
             super(context, evalExpression, "display");
+            this.elementDisplayValue = context.view.style["display"];
         }
 
         getConverter(): IValueConverter { return new VisibilityValueConverter(this.elementDisplayValue); }
@@ -448,7 +450,7 @@
         constructor(context: BindingContext, expression: IExpression) {
             super(context, expression);
         }
-        
+
         protected updateView(): any {
             var newValue = this.evalExpression.eval(this.context);
             var convertedValue = this.getConverter().convert(newValue);
@@ -645,7 +647,7 @@
     }
 
     export interface IValueConverter {
-        
+
         convert(value: any): any;
         convertBack(elementValue: any): any; 
 
@@ -769,7 +771,5 @@
         dispose() {
             Object.unobserve(this.observableArray, this.observeFunc);
         }
-
     }
-
 }

@@ -1,392 +1,552 @@
-var __extends = this.__extends || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    __.prototype = b.prototype;
-    d.prototype = new __();
-};
 var Mvvm;
 (function (Mvvm) {
     var TypeScript;
     (function (TypeScript) {
-        var Application = (function () {
-            function Application() {
+        class Application {
+            constructor() {
                 this.initialize();
             }
-            Application.prototype.startup = function () {
+            startup() {
                 var context = new BindingContext(this.root, new Array(this.root), this.root, document.body);
-                this.bindings = this.binder.bind(context);
-            };
-            Application.prototype.dispose = function () {
-                this.bindings.forEach(function (binding) {
+                this.bindings = this.binder.bind(context, true);
+                this.bindings.forEach(b => b.applyBinding());
+            }
+            dispose() {
+                this.bindings.forEach((binding) => {
                     binding.dispose();
                 });
-            };
-            Application.prototype.getBinder = function () {
+            }
+            getBinder() {
                 return new Binder(this.parser);
-            };
-            Application.prototype.getExpressionParser = function () {
+            }
+            getExpressionParser() {
                 return new ExpressionParser();
-            };
-            Application.prototype.getRoot = function () {
+            }
+            getRoot() {
                 throw new Error("Root view model should be provided");
-            };
-            Application.prototype.initialize = function () {
+            }
+            initialize() {
                 this.parser = this.getExpressionParser();
                 this.binder = this.getBinder();
                 this.root = this.getRoot();
-            };
-            return Application;
-        })();
-        TypeScript.Application = Application;
-        var ExpressionParser = (function () {
-            function ExpressionParser() {
             }
-            ExpressionParser.prototype.parse = function (exprValue, context) {
+        }
+        TypeScript.Application = Application;
+        class ExpressionParser {
+            parse(exprValue, context) {
                 var expressions = new Array();
-                exprValue.split(",").forEach(function (bindingExpr) {
+                exprValue.split(",").forEach((bindingExpr) => {
                     var splitedBinding = bindingExpr.split(":", 2);
                     //ExpressionParser.contextRegexp.exec("");
                     // TODO: Parse complex expressions in the future. 
                     expressions.push({
-                        bindingName: splitedBinding[0],
+                        bindingName: splitedBinding[0].trim(),
                         evalExpression: new Expression(splitedBinding[1]),
                         contextExpression: new Expression("$this"),
-                        memberName: splitedBinding[1]
+                        memberName: splitedBinding[1].trim()
                     });
                 });
                 return expressions;
-            };
-            //private static contextRegexp: RegExp = new RegExp("(?<params>(?<param>[^\.]+)(?:\.(?<param>[^\.]+))*");
-            ExpressionParser.contextRegexp = new RegExp("");
-            ExpressionParser.propertyNameExpression = new RegExp("");
-            return ExpressionParser;
-        })();
-        var Expression = (function () {
-            function Expression(body) {
+            }
+        }
+        //private static contextRegexp: RegExp = new RegExp("(?<params>(?<param>[^\.]+)(?:\.(?<param>[^\.]+))*");
+        ExpressionParser.contextRegexp = new RegExp("");
+        ExpressionParser.propertyNameExpression = new RegExp("");
+        class Expression {
+            constructor(body) {
                 var scopedBody = "with($this){return " + body + ";}";
-                this.exprFunction = new Function("$this", "$parent", "$parents", "$root", scopedBody);
+                this.exprFunction = new Function("$this", "$parent", "$parents", "$root", "$index", scopedBody);
                 this.evalMemberField = body.trim();
             }
-            Object.defineProperty(Expression.prototype, "evalMember", {
-                get: function () {
-                    // TODO: perform calculation of invoked member
-                    return this.evalMemberField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Expression.prototype.eval = function (context) {
-                return this.exprFunction(context.thisContext, context.parents[context.parents.length - 1], context.parents, context.root);
-            };
-            return Expression;
-        })();
+            get evalMember() {
+                // TODO: perform calculation of invoked member
+                return this.evalMemberField.replace("!", "");
+            }
+            eval(context) {
+                return this.exprFunction(context.thisContext, context.parents[context.parents.length - 1], context.parents, context.root, context.index);
+            }
+        }
         TypeScript.Expression = Expression;
-        var Binder = (function () {
-            function Binder(parser) {
+        class Binder {
+            constructor(parser) {
                 this.bindingFactories = {
-                    "text": new SimpleBindingFactory(function (ctx, expr) { return new TextBinding(ctx, expr); }),
-                    "value": new SimpleBindingFactory(function (ctx, evalExpr, ctxExpr) { return new ValueBinding(ctx, evalExpr, ctxExpr); }),
-                    "visible": new SimpleBindingFactory(function (ctx, evalExpr) { return new VisiblilityBinding(ctx, evalExpr); }),
-                    "selected": new SimpleBindingFactory(function (ctx, evalExpr, ctxExpr) { return new SelectedBinding(ctx, evalExpr, ctxExpr); })
+                    "text": new SimpleBindingFactory((ctx, expr) => new TextBinding(ctx, expr)),
+                    "value": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new ValueBinding(ctx, evalExpr, ctxExpr)),
+                    "visible": new SimpleBindingFactory((ctx, evalExpr) => new VisiblilityBinding(ctx, evalExpr)),
+                    "selected": new SimpleBindingFactory((ctx, evalExpr, ctxExpr) => new SelectedBinding(ctx, evalExpr, ctxExpr)),
+                    "list": new SimpleBindingFactory((ctx, evalExpr) => new ListBinding(ctx, evalExpr, this)),
+                    "submit": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "submit")),
+                    "click": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "click")),
+                    "change": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "change")),
+                    "dblClick": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "dblclick")),
+                    "blur": new SimpleBindingFactory((ctx, evalExpr) => new EventBinding(ctx, evalExpr, "blur")),
+                    "escape": new SimpleBindingFactory((ctx, evalExpr) => new EscapeBinding(ctx, evalExpr)),
+                    "class": new SimpleBindingFactory((ctx, evalExpr) => new ClassBinding(ctx, evalExpr)),
                 };
                 this.parser = parser;
             }
-            Binder.prototype.bind = function (context) {
-                var _this = this;
+            bind(context, bindRootElement) {
                 var bindingList = new Array();
+                if (bindRootElement) {
+                    var rootElement = context.view;
+                    this.bindElement(rootElement, context).forEach((binding) => {
+                        bindingList.push(binding);
+                    });
+                }
                 for (var i = 0; i < context.view.children.length; i++) {
                     var child = context.view.children[i];
-                    var thisContext;
-                    var parents;
-                    // data-context
-                    var dataContextAttr = child.attributes.getNamedItem("data-context");
-                    if (dataContextAttr != null) {
-                        var ctxExpression = new Expression(dataContextAttr.value);
-                        thisContext = ctxExpression.eval(context);
-                        parents = new Array(context.parents, context.thisContext);
-                    }
-                    else {
-                        thisContext = context.thisContext;
-                        parents = context.parents;
-                    }
-                    var newContext = new BindingContext(thisContext, parents, context.root, child);
-                    // data-bind
-                    var dataBindAttr = child.attributes.getNamedItem("data-bind");
-                    if (dataBindAttr != null) {
-                        var expressions = this.parser.parse(dataBindAttr.value, newContext);
-                        expressions.forEach(function (expr) {
-                            var bindingFactory = _this.bindingFactories[expr.bindingName];
-                            var binding = bindingFactory != null ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression) : _this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
-                            bindingList.push(binding);
-                        });
-                    }
+                    this.bindElement(child, context, true).forEach((binding) => {
+                        bindingList.push(binding);
+                    });
+                    ;
+                }
+                return bindingList;
+            }
+            bindElement(element, context, recursiveBind) {
+                var bindingList = new Array();
+                var thisContext;
+                var parents;
+                // data-context
+                var dataContextAttr = element.attributes.getNamedItem("data-context");
+                if (dataContextAttr != null) {
+                    var ctxExpression = new Expression(dataContextAttr.value);
+                    thisContext = ctxExpression.eval(context);
+                    parents = new Array(context.parents, context.thisContext);
+                }
+                else {
+                    thisContext = context.thisContext;
+                    parents = context.parents;
+                }
+                var newContext = new BindingContext(thisContext, parents, context.root, element, context.index);
+                // data-bind
+                var dataBindAttr = element.attributes.getNamedItem("data-bind");
+                if (dataBindAttr != null) {
+                    var expressions = this.parser.parse(dataBindAttr.value, newContext);
+                    expressions.forEach((expr) => {
+                        var bindingFactory = this.bindingFactories[expr.bindingName];
+                        var binding = bindingFactory != null
+                            ? bindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression)
+                            : this.defaultBindingFactory.buildBinding(newContext, expr.evalExpression, expr.contextExpression);
+                        bindingList.push(binding);
+                    });
+                }
+                if (recursiveBind) {
                     // store to list
-                    this.bind(newContext).forEach(function (binding) {
+                    this.bind(newContext).forEach((binding) => {
                         bindingList.push(binding);
                     });
                 }
                 return bindingList;
-            };
-            return Binder;
-        })();
-        var SimpleBindingFactory = (function () {
-            function SimpleBindingFactory(buildBinding) {
+            }
+        }
+        class SimpleBindingFactory {
+            constructor(buildBinding) {
                 this.buildBinding = buildBinding;
             }
-            SimpleBindingFactory.prototype.buildBinding = function (context, evalExpression, contextExpression) {
+            buildBinding(context, evalExpression, contextExpression) {
                 return this.buildBinding(context, evalExpression, contextExpression);
-            };
-            return SimpleBindingFactory;
-        })();
-        var BindingBase = (function () {
-            function BindingBase(context, evalExpression) {
+            }
+        }
+        class BindingBase {
+            constructor(context, evalExpression) {
                 this.contextField = context;
                 this.evalExpressionField = evalExpression;
-                this.applyBinding();
             }
-            Object.defineProperty(BindingBase.prototype, "context", {
-                get: function () {
-                    return this.contextField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Object.defineProperty(BindingBase.prototype, "evalExpression", {
-                get: function () {
-                    return this.evalExpressionField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            BindingBase.prototype.getConverter = function () {
-                return new ToStringConverter();
-            };
-            BindingBase.prototype.applyBinding = function () {
-                throw new Error("Binding should be applied.");
-            };
-            BindingBase.prototype.dispose = function () {
-            };
-            return BindingBase;
-        })();
+            get isDispossed() { return this.isDispossedField; }
+            get context() { return this.contextField; }
+            get evalExpression() { return this.evalExpressionField; }
+            applyBinding() { throw new Error("Binding should be applied."); }
+            dispose() {
+                this.isDispossedField = true;
+            }
+        }
         TypeScript.BindingBase = BindingBase;
-        var PropertyBinding = (function (_super) {
-            __extends(PropertyBinding, _super);
-            function PropertyBinding(context, evalExpression, elementPropertyName) {
+        class PropertyBinding extends BindingBase {
+            constructor(context, evalExpression, elementPropertyName) {
+                super(context, evalExpression);
                 this.elementPropertyNameField = elementPropertyName;
-                _super.call(this, context, evalExpression);
             }
-            Object.defineProperty(PropertyBinding.prototype, "elementPropertyName", {
-                get: function () {
-                    return this.elementPropertyNameField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            PropertyBinding.prototype.applyBinding = function () {
-                var _this = this;
-                this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, function (changeInfo) {
-                    if (changeInfo.propertyName !== _this.evalExpression.evalMember)
+            get objectObserver() { return this.objectObserverField; }
+            get elementPropertyName() { return this.elementPropertyNameField; }
+            // Apply the reaction on the view model changes
+            applyBinding() {
+                this.objectObserverField = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+                    if (changeInfo.propertyName !== this.evalExpression.evalMember || this.isDispossed)
                         return;
-                    _this.updateView();
+                    this.updateView();
                 });
                 this.applyElementBinding();
                 this.updateView();
-            };
-            PropertyBinding.prototype.applyElementBinding = function () {
-            };
-            PropertyBinding.prototype.updateView = function () {
+            }
+            applyElementBinding() { }
+            getConverter() {
+                return new ToStringConverter();
+            }
+            updateView() {
                 var newValue = this.evalExpression.eval(this.context);
                 var convertedValue = this.getConverter().convert(newValue);
+                var currentElementValue = this.context.view[this.elementPropertyName];
+                if (convertedValue === currentElementValue)
+                    return;
                 this.context.view[this.elementPropertyName] = convertedValue;
-            };
-            return PropertyBinding;
-        })(BindingBase);
+            }
+            dispose() {
+                this.objectObserverField.dispose();
+                super.dispose();
+            }
+        }
         TypeScript.PropertyBinding = PropertyBinding;
-        var DuplexBinding = (function (_super) {
-            __extends(DuplexBinding, _super);
-            function DuplexBinding(context, evalExpression, contextExpression, elementPropertyName, changeEventName) {
+        class DuplexBinding extends PropertyBinding {
+            constructor(context, evalExpression, contextExpression, elementPropertyName, changeEventName) {
+                super(context, evalExpression, elementPropertyName);
                 this.changeEventName = changeEventName;
                 this.contextExpression = contextExpression;
-                _super.call(this, context, evalExpression, elementPropertyName);
             }
-            DuplexBinding.prototype.applyElementBinding = function () {
-                var _this = this;
+            // Apply the reaction on dom element changes
+            applyElementBinding() {
                 // TODO: perform the validation
                 var elementPropertyName = this.elementPropertyName;
                 var context = this.context;
                 var evalExpression = this.evalExpression;
-                this.context.view.addEventListener(this.changeEventName, function (e) {
-                    var convertedValue = _this.getConverter().convertBack(context.view[elementPropertyName]);
-                    var thisContext = _this.contextExpression.eval(context);
+                this.eventHandler = (e) => {
+                    var convertedValue = this.getConverter().convertBack(context.view[elementPropertyName]);
+                    var thisContext = this.contextExpression.eval(context);
                     // Set property back
                     thisContext[evalExpression.evalMember] = convertedValue;
-                });
-            };
-            return DuplexBinding;
-        })(PropertyBinding);
+                };
+                this.context.view.addEventListener(this.changeEventName, this.eventHandler);
+            }
+            dispose() {
+                this.context.view.removeEventListener(this.changeEventName, this.eventHandler);
+                super.dispose();
+            }
+        }
         TypeScript.DuplexBinding = DuplexBinding;
-        var ValueBinding = (function (_super) {
-            __extends(ValueBinding, _super);
-            function ValueBinding(context, evalExpression, contextExpression) {
-                _super.call(this, context, evalExpression, contextExpression, "value", "input");
+        class ValueBinding extends DuplexBinding {
+            constructor(context, evalExpression, contextExpression) {
+                super(context, evalExpression, contextExpression, "value", "input");
             }
-            return ValueBinding;
-        })(DuplexBinding);
+        }
         TypeScript.ValueBinding = ValueBinding;
-        var SelectedBinding = (function (_super) {
-            __extends(SelectedBinding, _super);
-            function SelectedBinding(context, evalExpression, contextExpression) {
-                _super.call(this, context, evalExpression, contextExpression, "checked", "change");
+        class SelectedBinding extends DuplexBinding {
+            constructor(context, evalExpression, contextExpression) {
+                super(context, evalExpression, contextExpression, "checked", "change");
             }
-            SelectedBinding.prototype.getConverter = function () {
-                return new CheckedConverter();
-            };
-            return SelectedBinding;
-        })(DuplexBinding);
+            getConverter() { return new CheckedConverter(); }
+        }
         TypeScript.SelectedBinding = SelectedBinding;
-        var CheckedConverter = (function () {
-            function CheckedConverter() {
-            }
-            CheckedConverter.prototype.convert = function (value) {
+        class CheckedConverter {
+            convert(value) {
                 return value;
-            };
-            CheckedConverter.prototype.convertBack = function (elementValue) {
-                return elementValue;
-            };
-            return CheckedConverter;
-        })();
-        var StyleBinding = (function (_super) {
-            __extends(StyleBinding, _super);
-            function StyleBinding() {
-                _super.apply(this, arguments);
             }
-            StyleBinding.prototype.updateView = function () {
+            convertBack(elementValue) {
+                return elementValue;
+            }
+        }
+        class StyleBinding extends PropertyBinding {
+            updateView() {
                 var newValue = this.evalExpression.eval(this.context);
                 var convertedValue = this.getConverter().convert(newValue);
                 this.context.view.style[this.elementPropertyName] = convertedValue;
-            };
-            return StyleBinding;
-        })(PropertyBinding);
+            }
+        }
         TypeScript.StyleBinding = StyleBinding;
-        var VisiblilityBinding = (function (_super) {
-            __extends(VisiblilityBinding, _super);
-            function VisiblilityBinding(context, evalExpression) {
-                _super.call(this, context, evalExpression, "visibility");
+        class VisiblilityBinding extends StyleBinding {
+            constructor(context, evalExpression) {
+                super(context, evalExpression, "display");
+                this.elementDisplayValue = context.view.style["display"];
             }
-            VisiblilityBinding.prototype.getConverter = function () {
-                return new VisibilityValueConverter();
-            };
-            return VisiblilityBinding;
-        })(StyleBinding);
+            getConverter() { return new VisibilityValueConverter(this.elementDisplayValue); }
+        }
         TypeScript.VisiblilityBinding = VisiblilityBinding;
-        var VisibilityValueConverter = (function () {
-            function VisibilityValueConverter() {
+        class VisibilityValueConverter {
+            constructor(elementDisplayValue) {
+                this.elementDisplayValue = elementDisplayValue;
             }
-            VisibilityValueConverter.prototype.convert = function (value) {
-                return value ? "visible" : "collapse";
-            };
-            VisibilityValueConverter.prototype.convertBack = function (elementValue) {
-                throw new Error("Back convertion is not supported.");
-            };
-            return VisibilityValueConverter;
-        })();
-        var TextBinding = (function (_super) {
-            __extends(TextBinding, _super);
-            function TextBinding(context, expression) {
-                _super.call(this, context, expression, "innerText");
+            convert(value) {
+                return value ? this.elementDisplayValue : "none";
             }
-            return TextBinding;
-        })(PropertyBinding);
+            convertBack(elementValue) { throw new Error("Back convertion is not supported."); }
+        }
+        class TextBinding extends PropertyBinding {
+            constructor(context, expression) {
+                super(context, expression, "textContent");
+            }
+        }
         TypeScript.TextBinding = TextBinding;
-        var EventBinding = (function (_super) {
-            __extends(EventBinding, _super);
-            function EventBinding(context, expression, eventName) {
-                _super.call(this, context, expression);
+        class ClassBinding extends PropertyBinding {
+            constructor(context, expression) {
+                super(context, expression);
+                this.previousClass = "";
+            }
+            updateView() {
+                var newValue = this.evalExpression.eval(this.context);
+                var convertedValue = this.getConverter().convert(newValue);
+                //this.context.view[this.elementPropertyName] = convertedValue;
+                this.removePreviousClasses();
+                var view = this.context.view;
+                convertedValue.split(" ").forEach(c => {
+                    if (c !== "")
+                        view.classList.add(c);
+                });
+                this.previousClass = convertedValue;
+            }
+            dispose() {
+                this.removePreviousClasses();
+                super.dispose();
+            }
+            removePreviousClasses() {
+                var view = this.context.view;
+                this.previousClass.split(" ").forEach(c => {
+                    if (c !== "")
+                        view.classList.remove(c);
+                });
+            }
+        }
+        TypeScript.ClassBinding = ClassBinding;
+        class ListBinding extends BindingBase {
+            constructor(context, listExpression, binder) {
+                super(context, listExpression);
+                this.binder = binder;
+                this.listBindingContexts = new Array();
+                this.extractTemplate();
+            }
+            applyBinding() {
+                this.clearElement();
+                // perform observing for array property itself
+                this.objectObserver = new ModernPropertyChangeObserver(this.context.thisContext, (changeInfo) => {
+                    if (changeInfo.propertyName !== this.evalExpression.evalMember)
+                        return;
+                    // just perform rebinding
+                    this.applyBinding();
+                });
+                // and now we have to observe collection changes
+                var observedArray = this.evalExpression.eval(this.context);
+                this.arrayObserver = new ModernArrayChangeObserver(observedArray, (changeInfos) => {
+                    var list = this.evalExpression.eval(this.context);
+                    // update each dom element according to changes
+                    changeInfos.forEach(ci => {
+                        switch (ci.action) {
+                            case NotifyCollectionChangedAction.Add:
+                                if (list[ci.index])
+                                    this.addNewItem(list[ci.index], ci.index);
+                                break;
+                            case NotifyCollectionChangedAction.Delete:
+                                this.deleteItem(ci.index);
+                                break;
+                            case NotifyCollectionChangedAction.Update:
+                                if (list[ci.index])
+                                    this.updateItem(ci.index, list[ci.index]);
+                            default:
+                                break;
+                        }
+                    });
+                });
+                this.populateElement();
+            }
+            extractTemplate() {
+                this.template = document.createElement("div");
+                for (var i = 0; i < this.context.view.children.length; i++) {
+                    var clonedNode = this.context.view.children[i].cloneNode(true);
+                    this.template.appendChild(clonedNode);
+                }
+                this.clearElement();
+            }
+            populateElement() {
+                var list = this.evalExpression.eval(this.context);
+                list.forEach((item, i) => this.addNewItem(item, i));
+            }
+            addNewItem(item, index) {
+                var clonedTemplate = this.template.cloneNode(true);
+                var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, clonedTemplate, index);
+                // create bindings for cloned template
+                var newBindings = this.binder.bind(context);
+                var listBindingCtx = new ListBindingContex(new Array(), newBindings);
+                newBindings.forEach(b => b.applyBinding());
+                // add all children to our view
+                while (clonedTemplate.children.length > 0) {
+                    var child = clonedTemplate.children[0];
+                    this.context.view.appendChild(child);
+                    listBindingCtx.elements.push(child);
+                }
+                // Save new binding for updates
+                this.listBindingContexts.push(listBindingCtx);
+            }
+            deleteItem(index) {
+                var listBindingCtx = this.listBindingContexts[index];
+                listBindingCtx.bindings.forEach(b => b.dispose());
+                // dont know why sometimes this swiched to timer context
+                listBindingCtx.elements.forEach(e => this.context.view.removeChild(e));
+                this.listBindingContexts.splice(index, 1);
+            }
+            updateItem(index, item) {
+                var listBindingCtx = this.listBindingContexts[index];
+                // dispose all bindings
+                listBindingCtx.bindings.forEach(b => b.dispose());
+                listBindingCtx.bindings.splice(0, listBindingCtx.bindings.length);
+                // and recreate all
+                listBindingCtx.elements.forEach(e => {
+                    var context = new BindingContext(item, new Array(this.context.parents, item), this.context.root, e, index);
+                    var newBindings = this.binder.bind(context, true);
+                    newBindings.forEach(b => {
+                        b.applyBinding();
+                        listBindingCtx.bindings.push(b);
+                    });
+                });
+            }
+            clearElement() {
+                while (this.context.view.firstChild) {
+                    this.context.view.removeChild(this.context.view.firstChild);
+                }
+            }
+            dispose() {
+                this.objectObserver.dispose();
+                super.dispose();
+            }
+        }
+        TypeScript.ListBinding = ListBinding;
+        class ListBindingContex {
+            constructor(elements, bindings) {
+                this.elements = elements;
+                this.bindings = bindings;
+            }
+        }
+        class EventBinding extends BindingBase {
+            constructor(context, eventExpression, eventName) {
+                super(context, eventExpression);
                 this.eventNameField = eventName;
             }
-            Object.defineProperty(EventBinding.prototype, "eventName", {
-                get: function () {
-                    return this.eventNameField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            EventBinding.prototype.applyBinding = function () {
-                var _this = this;
-                this.context.view.addEventListener(this.eventName, function () {
-                    _this.evalExpression.eval(_this.context);
-                });
-            };
-            return EventBinding;
-        })(BindingBase);
-        TypeScript.EventBinding = EventBinding;
-        var ToStringConverter = (function () {
-            function ToStringConverter() {
+            get eventName() { return this.eventNameField; }
+            applyBinding() {
+                // create local scope because addEventListener forces to set "this" to dom element
+                var thisContext = this.context;
+                this.eventHandler = (e) => {
+                    this.evalEventHandler(e, thisContext);
+                    //e.preventDefault();
+                    //if (this.isDispossed) return;
+                    //this.evalExpression.eval(thisContext);
+                };
+                this.context.view.addEventListener(this.eventName, this.eventHandler);
             }
-            ToStringConverter.prototype.convert = function (value) {
+            dispose() {
+                this.context.view.removeEventListener(this.eventName, this.eventHandler);
+                super.dispose();
+            }
+            evalEventHandler(e, thisContext) {
+                e.preventDefault();
+                if (this.isDispossed)
+                    return;
+                this.evalExpression.eval(thisContext);
+            }
+        }
+        TypeScript.EventBinding = EventBinding;
+        class EscapeBinding extends EventBinding {
+            constructor(context, eventExpression) {
+                super(context, eventExpression, "keyup");
+            }
+            evalEventHandler(e, thisContext) {
+                if (e.keyCode !== 27)
+                    return;
+                e.preventDefault();
+                if (this.isDispossed)
+                    return;
+                this.evalExpression.eval(thisContext);
+                this.context.view.blur();
+            }
+        }
+        TypeScript.EscapeBinding = EscapeBinding;
+        class ToStringConverter {
+            convert(value) {
+                if (value == null)
+                    return "";
                 return value.toString();
-            };
-            ToStringConverter.prototype.convertBack = function (elementValue) {
+            }
+            convertBack(elementValue) {
                 return elementValue;
-            };
-            return ToStringConverter;
-        })();
+            }
+        }
         TypeScript.ToStringConverter = ToStringConverter;
-        var BindingContext = (function () {
-            function BindingContext(thisContext, parents, root, view) {
+        class BindingContext {
+            constructor(thisContext, parents, root, view, index) {
                 this.thisContextField = thisContext;
                 this.parentsField = parents;
+                this.rootField = root;
                 this.viewField = view;
+                this.indexField = index;
             }
-            Object.defineProperty(BindingContext.prototype, "thisContext", {
-                get: function () {
-                    return this.thisContextField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Object.defineProperty(BindingContext.prototype, "parents", {
-                get: function () {
-                    return this.parentsField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Object.defineProperty(BindingContext.prototype, "root", {
-                get: function () {
-                    return this.rootField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Object.defineProperty(BindingContext.prototype, "view", {
-                get: function () {
-                    return this.viewField;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            return BindingContext;
-        })();
+            get thisContext() { return this.thisContextField; }
+            get parents() { return this.parentsField; }
+            get root() { return this.rootField; }
+            get view() { return this.viewField; }
+            get index() { return this.indexField; }
+        }
         TypeScript.BindingContext = BindingContext;
-        var ModernPropertyChangeObserver = (function () {
-            function ModernPropertyChangeObserver(observable, handler) {
+        class ModernPropertyChangeObserver {
+            constructor(observable, handler) {
                 this.observable = observable;
                 this.handler = handler;
                 this.subscribe();
             }
-            ModernPropertyChangeObserver.prototype.subscribe = function () {
-                var _this = this;
-                Object.observe(this.observable, function (e) {
+            subscribe() {
+                this.observeFunc = e => {
                     for (var i = 0; i < e.length; i++) {
-                        _this.handler({ propertyName: e[i].name });
+                        this.handler({ propertyName: e[i].name });
                     }
-                });
-            };
-            ModernPropertyChangeObserver.prototype.dispose = function () {
-            };
-            return ModernPropertyChangeObserver;
-        })();
+                };
+                if (this.observable == null || typeof this.observable == "string")
+                    return;
+                Object.observe(this.observable, this.observeFunc);
+            }
+            dispose() {
+                Object.unobserve(this.observable, this.observeFunc);
+            }
+        }
+        TypeScript.ModernPropertyChangeObserver = ModernPropertyChangeObserver;
+        (function (NotifyCollectionChangedAction) {
+            NotifyCollectionChangedAction[NotifyCollectionChangedAction["Add"] = 0] = "Add";
+            NotifyCollectionChangedAction[NotifyCollectionChangedAction["Update"] = 1] = "Update";
+            NotifyCollectionChangedAction[NotifyCollectionChangedAction["Delete"] = 2] = "Delete";
+        })(TypeScript.NotifyCollectionChangedAction || (TypeScript.NotifyCollectionChangedAction = {}));
+        var NotifyCollectionChangedAction = TypeScript.NotifyCollectionChangedAction;
+        class ModernArrayChangeObserver {
+            constructor(observableArray, handler) {
+                this.observableArray = observableArray;
+                this.handler = handler;
+                this.subscribe();
+            }
+            subscribe() {
+                this.observeFunc = e => {
+                    var changeInfos = new Array();
+                    for (var i = 0; i < e.length; i++) {
+                        if (e[i].name === "length")
+                            continue;
+                        var action;
+                        switch (e[i].type) {
+                            case "add":
+                                action = NotifyCollectionChangedAction.Add;
+                                break;
+                            case "update":
+                                action = NotifyCollectionChangedAction.Update;
+                                break;
+                            case "delete":
+                                action = NotifyCollectionChangedAction.Delete;
+                                break;
+                            default:
+                                throw new Error("Unknown change");
+                        }
+                        changeInfos.push({
+                            action: action,
+                            index: parseInt(e[i].name)
+                        });
+                    }
+                    this.handler(changeInfos);
+                };
+                Object.observe(this.observableArray, this.observeFunc);
+            }
+            dispose() {
+                Object.unobserve(this.observableArray, this.observeFunc);
+            }
+        }
     })(TypeScript = Mvvm.TypeScript || (Mvvm.TypeScript = {}));
 })(Mvvm || (Mvvm = {}));
 //# sourceMappingURL=Mvvm.TypeScript.js.map
